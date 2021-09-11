@@ -13,8 +13,7 @@ LAB L1 INSTRUCTIONS:
  *   Legal ops: ~ |
  */
 int bitAnd(int x, int y) {
-
-
+    return ~(~x | ~y);
 }
 
 /* 
@@ -24,7 +23,7 @@ int bitAnd(int x, int y) {
  *   Legal ops: ! ~ & ^ | + << >>
  */
 int addOK(int x, int y) {
-
+    return ((x >> 31 & 1) ^ (y >> 31 & 1)) | !((x >> 31 & 1) ^ ((x+y) >> 31 & 1));
 }
 
 /* 
@@ -35,7 +34,7 @@ int addOK(int x, int y) {
  *   Rating: 2
  */
 int isNegative(int x) {
-
+    return (x >> 31) & 1;
 }
 
 /* 
@@ -45,7 +44,7 @@ int isNegative(int x) {
  */
 int logicalShift(int x, int y)
 {
-  
+    return (x >> y) & ~((~1 + 1) << (32 + ~y + 1));
 }
 
 
@@ -55,5 +54,10 @@ int logicalShift(int x, int y)
  *   Legal ops: ! ~ & ^ | + << >>
  */
 int bitCount(int x) {
-
+    int count = (x & 0x55555555) + (x >> 1 & 0x55555555);
+    count = (count & 0x33333333) + (count >> 2 & 0x33333333);
+    count = (count & 0x0f0f0f0f) + (count >> 4 & 0x0f0f0f0f);
+    count = (count & 0x00ff00ff) + (count >> 8 & 0x00ff00ff);
+    count = (count & 0x0000ffff) + (count >> 16 & 0x0000ffff);
+    return count;
 }
