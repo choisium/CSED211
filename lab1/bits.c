@@ -1,5 +1,6 @@
 /* CSED 211 Fall '2021.  Lab L1 */
-
+#include <limits.h>
+#include <stdio.h>
 
 
 #if 0
@@ -60,4 +61,13 @@ int bitCount(int x) {
     count = (count & 0x00ff00ff) + (count >> 8 & 0x00ff00ff);
     count = (count & 0x0000ffff) + (count >> 16 & 0x0000ffff);
     return count;
+}
+
+int main() {
+    printf("%d\n", bitAnd(6, 5)); // 4
+    printf("%d, %d\n", addOK(0x80000000,0x80000000), addOK(0x80000000,0x70000000)); // 0, 1
+    printf("%d\n", isNegative(-1)); // 1
+    printf("%d %d\n", logicalShift(-6, 2), logicalShift(3, 1));
+    printf("%d %d\n", bitCount(5), bitCount(7)); // 2, 3
+
 }
