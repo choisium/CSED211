@@ -1,6 +1,4 @@
 /* CSED 211 Fall '2021.  Lab L1 */
-#include <limits.h>
-#include <stdio.h>
 
 
 #if 0
@@ -77,13 +75,4 @@ int bitCount(int x) {
 
     // get sum of 1 for all bits by adding count in every 8 bits
     return (count + (count >> 8) + (count >> 16) + (count >> 24)) & 0xff;  // 7 ops
-}
-
-int main() {
-    printf("%d\n", bitAnd(6, 5)); // 4
-    printf("%d, %d\n", addOK(0x80000000,0x80000000), addOK(0x80000000,0x70000000)); // 0, 1
-    printf("%d\n", isNegative(-1)); // 1
-    printf("%X %X %d\n", -6, logicalShift(-6, 2), logicalShift(3, 1)); // 3FFFFFFE 1
-    printf("%d %d\n", bitCount(5), bitCount(7)); // 2, 3
-
 }
