@@ -204,22 +204,23 @@ int main() {
   // test integer
   int one = INT_MIN;
   // int rnd = 0x40000041;
+  int i;
 
   printf("float neg - nan: %X %X\n", float_neg(pnan), float_neg(nnan));
   printf("float neg - inf: %X %X\n", float_neg(pinf), float_neg(ninf));
 
   // printf("\n");
   printf("float neg\n");
-  for (int i = pinf; i >= 0; i--) {
-    if (i % 100000000 == 0) printf("float neg %d\n", i);
+  for (i = pinf; i >= 0; i--) {
+    // if (i % 100000000 == 0) printf("float neg %d\n", i);
     if (f2u(-u2f(i)) != float_neg(i)) {
       printf("float neg - %d %X %X\n", i, f2u(-u2f(i)), float_neg(i));
       break;
     }
   }
   printf("plus done\n");
-  for (int i = ninf; i <= 0; i--) {
-    if (i % 100000000 == 0) printf("float neg %d\n", i);
+  for (i = ninf; i <= 0; i--) {
+    // if (i % 100000000 == 0) printf("float neg %d\n", i);
     if (f2u(-u2f(i)) != float_neg(i)) {
       printf("float neg - %d %X %X\n", i, f2u(-u2f(i)), float_neg(i));
       break;
@@ -228,14 +229,14 @@ int main() {
   printf("float neg done\n\n");
 
   printf("float i2f\n");
-  for (int i = INT_MAX; i >= 0; i--) {
+  for (i = INT_MAX; i >= 0; i--) {
     // if (i % 100000000 == 0) printf("float i2f %d\n", i);
     if (f2u((float) i) != float_i2f(i)) {
       printf("float i2f - %d %X %X\n", i, f2u((float) i), float_i2f(i));
       break;
     }
   }
-  for (int i = INT_MIN; i <= 0; i++) {
+  for (i = INT_MIN; i <= 0; i++) {
     // if (i % 100000000 == 0) printf("float i2f %d\n", i);
     if (f2u((float) i) != float_i2f(i)) {
       printf("float i2f - %d %X %X\n", i, f2u((float) i), float_i2f(i));
@@ -244,7 +245,7 @@ int main() {
   }
   printf("float i2f done\n\n");
   printf("float twice\n");
-  for (int i = pinf; i >= 0; i--) {
+  for (i = pinf; i >= 0; i--) {
     // if (i % 100000000 == 0) printf("float twice %d\n", i);
     if (f2u(2 * u2f(i)) != float_twice(i)) {
       printf("float twice - %d %X %X\n", i, f2u(2 * u2f(i)), float_twice(i));
@@ -252,7 +253,7 @@ int main() {
     }
   }
   printf("plus done\n");
-  for (int i = ninf; i <= 0; i--) {
+  for (i = ninf; i <= 0; i--) {
     // if (i % 100000000 == 0) printf("float twice %d\n", i);
     if (f2u(2 * u2f(i)) != float_twice(i)) {
       printf("float twice - %d %X %X\n", i, f2u(2 * u2f(i)), float_twice(i));
@@ -262,7 +263,7 @@ int main() {
   printf("float twice done\n\n");
 
   printf("float abs done\n");
-  for (int i = pinf; i >= 0; i--) {
+  for (i = pinf; i >= 0; i--) {
     // if (i % 100000000 == 0) printf("float abs %d\n", i);
     if (f2u(fabs(u2f(i))) != float_abs(i)) {
       printf("float abs - %d %X %X\n", i, f2u(fabs(u2f(i))), float_abs(i));
@@ -270,7 +271,7 @@ int main() {
     }
   }
   printf("plus done\n");
-  for (int i = ninf; i <= 0; i--) {
+  for (i = ninf; i <= 0; i--) {
     // if (i % 100000000 == 0) printf("float abs %d\n", i);
     if (f2u(fabs(u2f(i))) != float_abs(i)) {
       printf("float abs - %d %X %X\n", i, f2u(fabs(u2f(i))), float_abs(i));
@@ -280,7 +281,7 @@ int main() {
   printf("float abs done\n\n");
 
   printf("float half\n");
-  for (int i = pinf; i >= 0; i--) {
+  for (i = pinf; i >= 0; i--) {
     // if (i % 100000000 == 0) printf("float half %d\n", i);
     if (f2u(u2f(i) / 2) != float_half(i)) {
       printf("float half wrong - %d %X %X\n", i, f2u(u2f(i) / 2), float_half(i));
@@ -288,7 +289,7 @@ int main() {
     }
   }
   printf("plus done\n");
-  for (int i = ninf; i <= 0; i--) {
+  for (i = ninf; i <= 0; i--) {
     // if (i % 100000000 == 0) printf("float half %d\n", i);
     if (f2u(u2f(i) / 2) != float_half(i)) {
       printf("float half wrong - %X %X %X\n", f2u(u2f(i)), f2u(u2f(i)/ 2), float_half(i));
