@@ -75,7 +75,8 @@ unsigned float_i2f(int x) {
   int s;
   if (g_pos >= 2) {
     s = x >> (g_pos - 2) & 1;
-    for (int i = g_pos - 2; i >= 0; i--) {
+    int i;
+    for (i = g_pos - 2; i >= 0; i--) {
       s |= ((x >> i) & 1);
     }
   } else {
