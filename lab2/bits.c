@@ -35,7 +35,7 @@ You are expressly forbidden to:
  *   Rating: 2
  */
 unsigned float_neg(unsigned uf) {
-  unsigned sign = uf >> 31;
+  unsigned sign = (uf >> 31) & 1;
   unsigned exp = (uf >> 23) & 0xFF;
   unsigned frac = uf & 0x7FFFFF;
 
@@ -55,6 +55,7 @@ unsigned float_neg(unsigned uf) {
  */
 unsigned float_i2f(int x) {
   if (x == 0) return 0;
+
   unsigned sign, exp, frac;
   sign = (x >> 31) & 1;
   if (sign) x = -x;
@@ -110,7 +111,7 @@ unsigned float_i2f(int x) {
  *   Rating: 4
  */
 unsigned float_twice(unsigned uf) {
-  unsigned sign = uf >> 31;
+  unsigned sign = (uf >> 31) & 1;
   unsigned exp = (uf >> 23) & 0xFF;
   unsigned frac = uf & 0x7FFFFF;
 
@@ -135,7 +136,7 @@ unsigned float_twice(unsigned uf) {
  *   Rating: 2
  */
 unsigned float_abs(unsigned uf) {
-  unsigned sign = uf >> 31;
+  unsigned sign = (uf >> 31) & 1;
   unsigned exp = (uf >> 23) & 0xFF;
   unsigned frac = uf & 0x7FFFFF;
 
@@ -156,7 +157,7 @@ unsigned float_abs(unsigned uf) {
  *   Rating: 4
  */
 unsigned float_half(unsigned uf) {
-  unsigned sign = uf >> 31;
+  unsigned sign = (uf >> 31) & 1;
   unsigned exp = (uf >> 23) & 0xFF;
   unsigned frac = uf & 0x7FFFFF;
 
