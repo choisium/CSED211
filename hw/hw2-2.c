@@ -1,9 +1,18 @@
+#include <stdio.h>
+
 long cread(long *xp) {
     return (xp ? *xp : 0);
 }
 
 long cread_alt(long *xp) {
-    // if (!xp) return 0;
-    // else return *xp;
-    return (!xp? 0 : *xp);
+    long zero = 0;
+    long **xpp = &xp;
+    return *(*xpp? *xpp : &zero);
+}
+
+int main() {
+    long a = 1;
+    printf("%ld %ld\n", cread(&a), cread_alt(&a));
+    printf("%ld %ld\n", cread(NULL), cread_alt(NULL));
+    return 0;
 }
