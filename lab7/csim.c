@@ -162,6 +162,7 @@ void simulate() {
     }
 
     while (fscanf(trace, " %c %x,%d", &type, &address, &size) != EOF) {
+        if (type == 'I') continue;
         if (verbose_flag) printf("%c %x,%d", type, address, size);
 
         iter_count = type == 'M'? 2 : 1;
