@@ -19,6 +19,13 @@ static int E = -1;
 static int b = -1;
 static char* t;
 
+/*
+    cache[set index][element index]
+    LSB 1 bit is valid bit. Remainder is tag bits.
+*/
+static unsigned** cache;
+
+
 void parse_args(int argc, char* argv[]);
 void usage();
 void simulate(int* hit, int* miss, int* eviction);
@@ -83,7 +90,6 @@ void parse_args(int argc, char* argv[]) {
     }
 }
 
-
 void usage() {
     printf("Usage: ./csim [-hv] -s <num> -E <num> -b <num> -t <file>\n");
     printf("Options:\n");
@@ -99,18 +105,33 @@ void usage() {
     printf("  linux>  ./csim -v -s 8 -E 2 -b 4 -t traces/yi.trace\n");
 }
 
-
 void simulate(int* hit, int* miss, int* eviction) {
     char type;
     unsigned address;
     int size;
+    int i, j;
 
     FILE* trace = fopen(t, "r");
-    if (trace == NULL) exit(EXIT_FAILURE);
+    if (trace == NULL) {
+        fprintf(stderr, "%s: No such file or directory\n", t);
+        exit(EXIT_FAILURE);
+    }
+
+    cache = calloc(s, sizeof(unsigned *));
+    for(i = 0; i < s; i++) {
+        cache[i] = calloc(E, sizeof(unsigned));
+        for(j = 0; j < E; j++)
+            cache[i][j] = 0;
+    }
 
     while (fscanf(trace, " %c %x,%d", &type, &address, &size) != EOF) {
         printf("%c %x %d\n", type, address, size);
     }
+
+    for(i = 0; i < s; i++) {
+        free(cache[i]);
+    }
+    free(cache);
 
     fclose(trace);
 }
