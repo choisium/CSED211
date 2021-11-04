@@ -151,10 +151,10 @@ void simulate() {
         exit(EXIT_FAILURE);
     }
 
-    cache_tag = calloc(s, sizeof(unsigned *));
-    cache_lru = calloc(s, sizeof(int *));
+    cache_tag = calloc(1 << s, sizeof(unsigned *));
+    cache_lru = calloc(1 << s, sizeof(int *));
 
-    for(i = 0; i < s; i++) {
+    for(i = 0; i < 1 << s; i++) {
         cache_tag[i] = calloc(E, sizeof(unsigned));
         cache_lru[i] = calloc(E, sizeof(int));
         for(j = 0; j < E; j++)
@@ -188,7 +188,7 @@ void simulate() {
         if (verbose_flag) printf("\n");
     }
 
-    for(i = 0; i < s; i++) {
+    for(i = 0; i < 1 << s; i++) {
         free(cache_tag[i]);
         free(cache_lru[i]);
     }
