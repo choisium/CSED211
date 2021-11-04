@@ -140,7 +140,7 @@ void cache_controller(unsigned address, int* is_hit, int* is_evicted) {
 void simulate() {
     int hit = 0, miss = 0, eviction = 0;
     char type;
-    unsigned address, next_address;
+    unsigned address;
     int size;
     int is_hit, is_evicted;
     int i, j, iter_count;
@@ -167,23 +167,19 @@ void simulate() {
 
         iter_count = type == 'M'? 2 : 1;
         for (i = 0; i < iter_count; i++) {
-            next_address = address - address % (1 << b);
-            do {
-                cache_controller(address, &is_hit, &is_evicted);
-                if (is_hit) {
-                    hit++;
-                    if (verbose_flag) printf(" hit");
-                }
-                else {
-                    miss++;
-                    if (verbose_flag) printf(" miss");
-                }
-                if(is_evicted) {
-                    eviction++;
-                    if (verbose_flag) printf(" eviction");
-                }
-                next_address += (1 << b);
-            } while (next_address < address + size);
+            cache_controller(address, &is_hit, &is_evicted);
+            if (is_hit) {
+                hit++;
+                if (verbose_flag) printf(" hit");
+            }
+            else {
+                miss++;
+                if (verbose_flag) printf(" miss");
+            }
+            if(is_evicted) {
+                eviction++;
+                if (verbose_flag) printf(" eviction");
+            }
         }
 
         if (verbose_flag) printf("\n");
