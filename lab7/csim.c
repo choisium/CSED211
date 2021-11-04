@@ -165,7 +165,7 @@ void simulate() {
     }
 
     while (fscanf(trace, " %c %x,%d", &type, &address, &size) != EOF) {
-        printf("%c %x,%d", type, address, size);
+        if (verbose_flag) printf("%c %x,%d", type, address, size);
 
         iter_count = type == 'M'? 2 : 1;
         for (i = 0; i < iter_count; i++) {
@@ -174,21 +174,21 @@ void simulate() {
                 cache_controller(address, &is_hit, &is_evicted);
                 if (is_hit) {
                     hit++;
-                    printf(" hit");
+                    if (verbose_flag) printf(" hit");
                 }
                 else {
                     miss++;
-                    printf(" miss");
+                    if (verbose_flag) printf(" miss");
                 }
                 if(is_evicted) {
                     eviction++;
-                    printf(" eviction");
+                    if (verbose_flag) printf(" eviction");
                 }
                 next_address += (1 << b);
             } while (next_address < address + size);
         }
 
-        printf("\n");
+        if (verbose_flag) printf("\n");
     }
 
     for(i = 0; i < s; i++) {
