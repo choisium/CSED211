@@ -111,7 +111,7 @@ void usage() {
 void cache_controller(unsigned address, int* is_hit, int* is_evicted) {
     static int current_time = 0;
 
-    int set_index = (address >> b) & ~((~1 + 1) << s);
+    int set_index = (address >> b) % (1 << s);
     unsigned tag = address >> (s + b);
     int elem_index, ru, lru = INT_MAX;
     int evicted_index = -1;
@@ -145,10 +145,10 @@ void cache_controller(unsigned address, int* is_hit, int* is_evicted) {
 
 void simulate(int* hit, int* miss, int* eviction) {
     char type;
-    unsigned address;
+    unsigned address, next_address;
     int size;
     int is_hit, is_evicted;
-    int i, j;
+    int i, j, iter_count;
 
     FILE* trace = fopen(t, "r");
     if (trace == NULL) {
@@ -167,11 +167,29 @@ void simulate(int* hit, int* miss, int* eviction) {
     }
 
     while (fscanf(trace, " %c %x,%d", &type, &address, &size) != EOF) {
-        cache_controller(address, &is_hit, &is_evicted);
         printf("%c %x,%d", type, address, size);
-        if (is_hit) printf(" hit");
-        else printf(" miss");
-        if(is_evicted) printf(" eviction");
+
+        iter_count = type == 'M'? 2 : 1;
+        for (i = 0; i < iter_count; i++) {
+            next_address = address - address % (1 << b);
+            do {
+                cache_controller(address, &is_hit, &is_evicted);
+                if (is_hit) {
+                    *hit++;
+                    printf(" hit");
+                }
+                else {
+                    *miss++;
+                    printf(" miss");
+                }
+                if(is_evicted) {
+                    *eviction++;
+                    printf(" eviction");
+                }
+                next_address += (1 << b);
+            } while (next_address < address + size);
+        }
+
         printf("\n");
     }
 
