@@ -10,6 +10,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 #include "cachelab.h"
 
 static int verbose_flag = 0;
@@ -23,12 +24,14 @@ static char* t;
     cache[set index][element index]
     LSB 1 bit is valid bit. Remainder is tag bits.
 */
-static unsigned** cache;
+static unsigned** cache_tag;
+static int** cache_lru;
 
 
 void parse_args(int argc, char* argv[]);
 void usage();
 void simulate(int* hit, int* miss, int* eviction);
+void cache_controller(unsigned address, int* is_hit, int* is_evicted);
 
 int main(int argc, char* argv[]) {
     int hit = 0, miss = 0, eviction = 0;
@@ -105,10 +108,46 @@ void usage() {
     printf("  linux>  ./csim -v -s 8 -E 2 -b 4 -t traces/yi.trace\n");
 }
 
+void cache_controller(unsigned address, int* is_hit, int* is_evicted) {
+    static int current_time = 0;
+
+    int set_index = (address >> b) & ~((~1 + 1) << s);
+    unsigned tag = address >> (s + b);
+    int elem_index, ru, lru = INT_MAX;
+    int evicted_index = -1;
+
+    // miss -> load
+    *is_evicted = 0;
+    *is_hit = 0;
+
+    for (elem_index = 0; elem_index < E; elem_index++) {
+        ru = cache_lru[set_index][elem_index];
+        if (lru > ru) {
+            lru = ru;
+            evicted_index = elem_index;
+        }
+
+        if (ru >= 0 && cache_tag[set_index][elem_index] == tag) {
+            *is_hit = 1;
+            break;
+        }
+    }
+
+    if (*is_hit) { // cache hit
+        cache_lru[set_index][elem_index] = current_time++;
+    } else { // cache miss. need to update tag
+        if (cache_lru[set_index][evicted_index] >= 0)
+            *is_evicted = 1;
+        cache_tag[set_index][evicted_index] = tag;
+        cache_lru[set_index][evicted_index] = current_time++;
+    }
+}
+
 void simulate(int* hit, int* miss, int* eviction) {
     char type;
     unsigned address;
     int size;
+    int is_hit, is_evicted;
     int i, j;
 
     FILE* trace = fopen(t, "r");
@@ -117,21 +156,29 @@ void simulate(int* hit, int* miss, int* eviction) {
         exit(EXIT_FAILURE);
     }
 
-    cache = calloc(s, sizeof(unsigned *));
+    cache_tag = calloc(s, sizeof(unsigned *));
+    cache_lru = calloc(s, sizeof(int *));
+
     for(i = 0; i < s; i++) {
-        cache[i] = calloc(E, sizeof(unsigned));
+        cache_tag[i] = calloc(E, sizeof(unsigned));
+        cache_lru[i] = calloc(E, sizeof(int));
         for(j = 0; j < E; j++)
-            cache[i][j] = 0;
+            cache_lru[i][j] = -1;
     }
 
     while (fscanf(trace, " %c %x,%d", &type, &address, &size) != EOF) {
-        printf("%c %x %d\n", type, address, size);
+        cache_controller(address, &is_hit, &is_evicted);
+        printf("%c %x,%d", type, address, size);
+        if (is_hit) printf(" hit");
+        else printf(" miss");
+        if(is_evicted) printf(" eviction");
+        printf("\n");
     }
 
     for(i = 0; i < s; i++) {
-        free(cache[i]);
+        free(cache_tag[i]);
+        free(cache_lru[i]);
     }
-    free(cache);
 
     fclose(trace);
 }
