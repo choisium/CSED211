@@ -17,19 +17,23 @@ static int help_flag = 0;
 static int s = -1;
 static int E = -1;
 static int b = -1;
-static char* trace;
+static char* t;
 
 void parse_args(int argc, char* argv[]);
 void usage();
+void simulate(int* hit, int* miss, int* eviction);
 
 int main(int argc, char* argv[]) {
-    parse_args(argc, argv);
-    printf("s: %d, E: %d, b: %d, t: %s\n", s, E, b, trace);
+    int hit = 0, miss = 0, eviction = 0;
 
-    printSummary(0, 0, 0);
+    parse_args(argc, argv);
+    printf("s: %d, E: %d, b: %d, t: %s\n", s, E, b, t);
+
+    simulate(&hit, &miss, &eviction);
+
+    printSummary(hit, miss, eviction);
     return 0;
 }
-
 
 void parse_args(int argc, char* argv[]) {
     int c;
@@ -50,8 +54,8 @@ void parse_args(int argc, char* argv[]) {
                 b = atoi(optarg);
                 break;
             case 't':
-                trace = calloc(strlen(optarg) + 1, sizeof(char));
-                strcpy(trace, optarg);
+                t = calloc(strlen(optarg) + 1, sizeof(char));
+                strcpy(t, optarg);
                 break;
             case 'h':
                 help_flag = 1;
@@ -72,7 +76,7 @@ void parse_args(int argc, char* argv[]) {
                 abort ();
         }
     }
-    if (s == -1 || E == -1 || b == -1 || trace == NULL) {
+    if (s < 0 || E < 0 || b < 0 || t == NULL) {
         fprintf(stderr, "./csim: Missing required command line argument\n");
         usage();
         exit(EXIT_FAILURE);
@@ -93,4 +97,20 @@ void usage() {
     printf("Examples:\n");
     printf("  linux>  ./csim -s 4 -E 1 -b 4 -t traces/yi.trace\n");
     printf("  linux>  ./csim -v -s 8 -E 2 -b 4 -t traces/yi.trace\n");
+}
+
+
+void simulate(int* hit, int* miss, int* eviction) {
+    char type;
+    unsigned address;
+    int size;
+
+    FILE* trace = fopen(t, "r");
+    if (trace == NULL) exit(EXIT_FAILURE);
+
+    while (fscanf(trace, " %c %x,%d", &type, &address, &size) != EOF) {
+        printf("%c %x %d\n", type, address, size);
+    }
+
+    fclose(trace);
 }
