@@ -19,16 +19,11 @@ static int E = -1;
 static int b = -1;
 static char* trace;
 
-int parse_args(int argc, char* argv[]);
+void parse_args(int argc, char* argv[]);
 void usage();
 
 int main(int argc, char* argv[]) {
-    int ret;
-
-    ret = parse_args(argc, argv);
-    if (ret != 0) return ret;
-    if (help_flag) return 0;
-
+    parse_args(argc, argv);
     printf("s: %d, E: %d, b: %d, t: %s\n", s, E, b, trace);
 
     printSummary(0, 0, 0);
@@ -36,9 +31,8 @@ int main(int argc, char* argv[]) {
 }
 
 
-int parse_args(int argc, char* argv[]) {
+void parse_args(int argc, char* argv[]) {
     int c;
-
     opterr = 0;
 
     while ((c = getopt (argc, argv, "hvs:E:b:t:")) != -1) {
@@ -62,7 +56,7 @@ int parse_args(int argc, char* argv[]) {
             case 'h':
                 help_flag = 1;
                 usage();
-                return 0;
+                exit(EXIT_SUCCESS);
             case '?':
                 if (optopt == 'c')
                 fprintf (stderr, "./csim: Option -%c requires an argument.\n", optopt);
@@ -73,7 +67,7 @@ int parse_args(int argc, char* argv[]) {
                         "./csim: Unknown option character `\\x%x'.\n",
                         optopt);
                 usage();
-                return 1;
+                exit(EXIT_FAILURE);
             default:
                 abort ();
         }
@@ -81,9 +75,8 @@ int parse_args(int argc, char* argv[]) {
     if (s == -1 || E == -1 || b == -1 || trace == NULL) {
         fprintf(stderr, "./csim: Missing required command line argument\n");
         usage();
-        return 1;
+        exit(EXIT_FAILURE);
     }
-    return 0;
 }
 
 
