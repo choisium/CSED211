@@ -34,10 +34,7 @@ void simulate();
 void cache_controller(unsigned address, int* is_hit, int* is_evicted);
 
 int main(int argc, char* argv[]) {
-
     parse_args(argc, argv);
-    printf("s: %d, E: %d, b: %d, t: %s\n", s, E, b, t);
-
     simulate();
     return 0;
 }
