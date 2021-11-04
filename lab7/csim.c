@@ -30,18 +30,15 @@ static int** cache_lru;
 
 void parse_args(int argc, char* argv[]);
 void usage();
-void simulate(int* hit, int* miss, int* eviction);
+void simulate();
 void cache_controller(unsigned address, int* is_hit, int* is_evicted);
 
 int main(int argc, char* argv[]) {
-    int hit = 0, miss = 0, eviction = 0;
 
     parse_args(argc, argv);
     printf("s: %d, E: %d, b: %d, t: %s\n", s, E, b, t);
 
-    simulate(&hit, &miss, &eviction);
-
-    printSummary(hit, miss, eviction);
+    simulate();
     return 0;
 }
 
@@ -143,7 +140,8 @@ void cache_controller(unsigned address, int* is_hit, int* is_evicted) {
     }
 }
 
-void simulate(int* hit, int* miss, int* eviction) {
+void simulate() {
+    int hit = 0, miss = 0, eviction = 0;
     char type;
     unsigned address, next_address;
     int size;
@@ -175,15 +173,15 @@ void simulate(int* hit, int* miss, int* eviction) {
             do {
                 cache_controller(address, &is_hit, &is_evicted);
                 if (is_hit) {
-                    *hit++;
+                    hit++;
                     printf(" hit");
                 }
                 else {
-                    *miss++;
+                    miss++;
                     printf(" miss");
                 }
                 if(is_evicted) {
-                    *eviction++;
+                    eviction++;
                     printf(" eviction");
                 }
                 next_address += (1 << b);
@@ -199,4 +197,6 @@ void simulate(int* hit, int* miss, int* eviction) {
     }
 
     fclose(trace);
+
+    printSummary(hit, miss, eviction);
 }
