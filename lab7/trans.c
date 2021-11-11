@@ -19,6 +19,7 @@
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 void trans_32(int M, int N, int A[N][M], int B[M][N]);
 void trans_61(int M, int N, int A[N][M], int B[M][N]);
+void trans_64(int M, int N, int A[N][M], int B[M][N]);
 
 /* 
  * transpose_submit - This is the solution transpose function that you
@@ -32,15 +33,17 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
     if (M == 32) {
         trans_32(M, N, A, B);
-    } else {
+    } else if (M == 61) {
         trans_61(M, N, A, B);
+    } else {
+        trans_64(M, N, A, B);
     }
 
 }
 
 void trans_32(int M, int N, int A[N][M], int B[M][N])
 {
-    int i, j, p, q, K = 8;
+    int i, j, p, q, K = M == 8;
     int diag, d, diag_exists;
 
     for (i = 0; i < N; i += K) {
@@ -64,9 +67,38 @@ void trans_32(int M, int N, int A[N][M], int B[M][N])
     }
 }
 
-void trans_61(int M, int N, int A[N][M], int B[M][N])
+
+void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
     int i, j, p, q, K = 8;
+    int tmp;
+
+    for (i = 0; i < N; i += K) {
+        for (j = 0; j < M; j += K) {
+            if (i == j) {
+                for (p = i; p < i + K; p++) {
+                    B[N-i-1][N-i-1] = A[i][i];
+                }
+            } else {
+                for (p = i; p < (i + K < N? i + K: N); p++) {
+                    for (q = j; q < (j + K < M? j + K: M); q++) {
+                        B[q][p] = A[p][q];
+                    }
+                }
+            }
+        }
+    }
+
+    for (i = 0; i < N; i++) {
+        tmp = B[N-i-1][N-i-1];
+        B[N-i-1][N-i-1] = B[i][i];
+        B[i][i] = tmp;
+    }
+}
+
+void trans_61(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j, p, q, K = 16;
     int diag, d, diag_exists;
 
     for (i = 0; i < N; i += K) {
