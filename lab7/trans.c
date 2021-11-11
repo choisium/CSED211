@@ -43,7 +43,7 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 
 void trans_32(int M, int N, int A[N][M], int B[M][N])
 {
-    int i, j, p, q, K = M == 8;
+    int i, j, p, q, K = 8;
     int diag, d, diag_exists;
 
     for (i = 0; i < N; i += K) {
