@@ -71,8 +71,9 @@ void trans_32(int M, int N, int A[N][M], int B[M][N])
 void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
     int i, j, p, q, tmp, K = 8;
-    for (i = 32; i < 64; i+=K) {
-        for (j = 0; j < 32; j+=K) {
+    for (i = 0; i < M; i+=K) {
+        for (j = 0; j < N; j+=K) {
+            if (i == j) continue;
             for (p = i; p < i + K; p++) {
                 for (q = j; q < j + K; q++) {
                     B[q][p] = A[p][q];
@@ -80,42 +81,25 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
             }
         }
     }
-    for (i = 0; i < 32; i+=K) {
-        for (j = 32; j < 64; j+=K) {
-            for (p = i; p < i + K; p++) {
-                for (q = j; q < j + K; q++) {
-                    B[q][p] = A[p][q];
-                }
-            }
-        }
-    }
-    for (i = 0; i < 32; i+=K) {
-        for (j = 0; j < 32; j+=K) {
-            for (p = i; p < i + K; p++) {
-                for (q = j; q < j + K; q++) {
-                    B[32+q][32+p] = A[p][q];
-                }
-            }
-        }
-    }
-    for (i = 32; i < 64; i+=K) {
-        for (j = 32; j < 64; j+=K) {
-            for (p = i; p < i + K; p++) {
-                for (q = j; q < j + K; q++) {
-                    B[-32+q][-32+p] = A[p][q];
+    
+    for (i = 0; i < M; i+=K) {
+        for (p = i; p < i + K; p++) {
+            for (q = i; q < i + K; q++) {
+                if ((i / K) % 2 == 0) {
+                    B[q + K][p + K] = A[p][q];
+                } else {
+                    B[q - K][p - K] = A[p][q];
                 }
             }
         }
     }
 
-    for (i = 0; i < 32; i+=K) {
-        for (j = 0; j < 32; j+=K) {
-            for (p = i; p < i + K; p++) {
-                for (q = j; q < j + K; q++) {
-                    tmp = B[p][q];
-                    B[p][q] = B[p+32][q+32];
-                    B[p+32][q+32] = tmp;
-                }
+    for (i = 0; i < M; i += 2 * K) {
+        for (p = i; p < i + K; p++) {
+            for (q = i; q < i + K; q++) {
+                tmp = B[p][q];
+                B[p][q] = B[p+K][q+K];
+                B[p+K][q+K] = tmp;
             }
         }
     }
