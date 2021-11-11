@@ -70,7 +70,7 @@ void trans_32(int M, int N, int A[N][M], int B[M][N])
 
 void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
-    int i, j, p, q, K = 8;
+    int i, j, p, q, tmp, K = 8;
     for (i = 32; i < 64; i++) {
         for (j = 0; j < 32; j++) {
             for (p = i; p < i + K; p++) {
@@ -93,7 +93,7 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
         for (j = 0; j < 32; j++) {
             for (p = i; p < i + K; p++) {
                 for (q = j; q < j + K; q++) {
-                    B[32+p][32+q] = A[p][q];
+                    B[32+q][32+p] = A[p][q];
                 }
             }
         }
@@ -102,7 +102,19 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
         for (j = 32; j < 64; j++) {
             for (p = i; p < i + K; p++) {
                 for (q = j; q < j + K; q++) {
-                    B[-32+p][-32+q] = A[p][q];
+                    B[-32+q][-32+p] = A[p][q];
+                }
+            }
+        }
+    }
+
+    for (i = 0; i < 32; i++) {
+        for (j = 0; j < 32; j++) {
+            for (p = i; p < i + K; p++) {
+                for (q = j; q < j + K; q++) {
+                    tmp = B[p][q];
+                    B[p][q] = B[p+32][q+32];
+                    B[p+32][q+32] = tmp;
                 }
             }
         }
