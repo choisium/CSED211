@@ -70,41 +70,23 @@ void trans_32(int M, int N, int A[N][M], int B[M][N])
 
 void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
-    int i, j, p, q, K = 8;
-    int tmp;
+    int i, j, p, q, K = 16;
+    int diag, d, diag_exists;
 
     for (i = 0; i < N; i += K) {
-        for (j = 0; j < M; j += K) {
-            if (i == j) {
-                if ((i / K) % 2 == 0) {   // i = 0, 16, 32, 48
-                    for (p = 0; p < K; p++) {
-                        for (q = 0; q < K; q++) {
-                            B[i+K+q][i+K+p] = A[i+p][i+q];
-                        }
-                    }
-                } else {   // i = 8, 24, 40, 56
-                    for (p = 0; p < K; p++) {
-                        for (q = 0; q < K; q++) {
-                            B[i-K+q][i-K+p] = A[i+p][i+q];
-                        }
-                    }
-                }
-            } else {
-                for (p = i; p < i + K; p++) {
-                    for (q = j; q < j + K; q++) {
-                        B[q][p] = A[p][q];
-                    }
+        for (j = 0; j < M; j++) {
+            diag_exists = 0;
+            for (p = i; p < (i + K < N? i + K: N); p++) {
+                if (p == j) {
+                    diag_exists = 1;
+                    d = p;
+                    diag = A[p][j];
+                } else {
+                    B[j][p] = A[p][j];
                 }
             }
-        }
-    }
-
-    for (i = 0; i < N; i += 2 * K) {
-        for (p = 0; p < K; p++) {
-            for (q = 0; q < K; q++) {
-                tmp = B[i+p][i+q];
-                B[i+p][i+q] = B[i+K+p][i+K+q];
-                B[i+K+p][i+K+q] = tmp;
+            if (diag_exists) {
+                B[d][d] = diag;
             }
         }
     }
