@@ -1,3 +1,9 @@
+/*
+  Name: Choi Soomin
+  Student ID: 20160169
+  Login ID: choisium
+*/
+
 /* 
  * trans.c - Matrix transpose B = A^T
  *
@@ -22,6 +28,17 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
+    int i, j, p, q, K = 8;
+
+    for (i = 0; i < N; i += K) {
+        for (j = 0; j < M; j += K) {
+            for (p = i; p < (i + K < N? i + K: N); p++) {
+                for (q = j; q < (j + K < M? j + K: M); q++) {
+                    B[q][p] = A[p][q];
+                }
+            }
+        }
+    }
 }
 
 /* 
