@@ -76,23 +76,29 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
     for (i = 0; i < N; i += K) {
         for (j = 0; j < M; j += K) {
             if (i == j) {
-                for (p = i; p < i + K; p++) {
-                    B[N-i-1][N-i-1] = A[i][i];
+                if ((i / K) % 2 == 0) {   // i = 0, 16, 32, 48
+                    for (p = 0; p < K; p++) {
+                        for (q = 0; q < K; q++) {
+                            B[i+K+q][i+K+p] = A[i+p][i+q];
+                        }
+                    }
+                } else {   // i = 8, 24, 40, 56
+                    for (p = 0; p < K; p++) {
+                        for (q = 0; q < K; q++) {
+                            tmp = B[i+q][i+p];
+                            B[i+q][i+p] = B[i-K+q][i-K+p];
+                            B[i-K+q][i-K+p] = tmp;
+                        }
+                    }
                 }
             } else {
-                for (p = i; p < (i + K < N? i + K: N); p++) {
-                    for (q = j; q < (j + K < M? j + K: M); q++) {
+                for (p = i; p < i + K; p++) {
+                    for (q = j; q < j + K; q++) {
                         B[q][p] = A[p][q];
                     }
                 }
             }
         }
-    }
-
-    for (i = 0; i < N; i++) {
-        tmp = B[N-i-1][N-i-1];
-        B[N-i-1][N-i-1] = B[i][i];
-        B[i][i] = tmp;
     }
 }
 
