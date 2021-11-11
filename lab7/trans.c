@@ -85,9 +85,7 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
                 } else {   // i = 8, 24, 40, 56
                     for (p = 0; p < K; p++) {
                         for (q = 0; q < K; q++) {
-                            tmp = B[i+q][i+p];
-                            B[i+q][i+p] = B[i-K+q][i-K+p];
-                            B[i-K+q][i-K+p] = tmp;
+                            B[i-K+q][i-K+p] = A[i+p][i+q];
                         }
                     }
                 }
@@ -97,6 +95,16 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
                         B[q][p] = A[p][q];
                     }
                 }
+            }
+        }
+    }
+
+    for (i = 0; i < N; i += 2 * K) {
+        for (p = 0; p < K; p++) {
+            for (q = 0; q < K; q++) {
+                tmp = B[i+p][i+q];
+                B[i+p][i+q] = B[i+K+p][i+K+q];
+                B[i+K+p][i+K+q] = tmp;
             }
         }
     }
