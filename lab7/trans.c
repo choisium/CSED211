@@ -17,6 +17,8 @@
 #include "cachelab.h"
 
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
+void trans_32(int M, int N, int A[N][M], int B[M][N]);
+void trans_61(int M, int N, int A[N][M], int B[M][N]);
 
 /* 
  * transpose_submit - This is the solution transpose function that you
@@ -28,13 +30,60 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
+    if (M == 32) {
+        trans_32(M, N, A, B);
+    } else {
+        trans_61(M, N, A, B);
+    }
+
+}
+
+void trans_32(int M, int N, int A[N][M], int B[M][N])
+{
     int i, j, p, q, K = 8;
+    int diag, d, diag_exists;
 
     for (i = 0; i < N; i += K) {
         for (j = 0; j < M; j += K) {
             for (p = i; p < (i + K < N? i + K: N); p++) {
+                diag_exists = 0;
                 for (q = j; q < (j + K < M? j + K: M); q++) {
-                    B[q][p] = A[p][q];
+                    if (p == q) {
+                        diag_exists = 1;
+                        d = p;
+                        diag = A[p][q];
+                    } else {
+                        B[q][p] = A[p][q];
+                    }
+                }
+                if (diag_exists) {
+                    B[d][d] = diag;
+                }
+            }
+        }
+    }
+}
+
+void trans_61(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j, p, q, K = 8;
+    int diag, d, diag_exists;
+
+    for (i = 0; i < N; i += K) {
+        for (j = 0; j < M; j += K) {
+            for (p = i; p < (i + K < N? i + K: N); p++) {
+                diag_exists = 0;
+                for (q = j; q < (j + K < M? j + K: M); q++) {
+                    if (p == q) {
+                        diag_exists = 1;
+                        d = p;
+                        diag = A[p][q];
+                    } else {
+                        B[q][p] = A[p][q];
+                    }
+                }
+                if (diag_exists) {
+                    B[d][d] = diag;
                 }
             }
         }
