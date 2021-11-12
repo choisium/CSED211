@@ -88,7 +88,7 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
             } while (ay == next_y);
 
             next_y2 = next_y;
-            next_x2 = next_x2;
+            next_x2 = next_x;
             do {
                 next_y2 += 8;
                 if (next_y2 >= N) {
