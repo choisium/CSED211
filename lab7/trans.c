@@ -100,10 +100,8 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
                 B[i+2+k][j] = tmp;
             }
         }
-    }
-    
-    // Do transpose in every 8*8 matrices
-    for (i = 0; i < N; i += 8) {
+
+        // Do transpose in every 8*8 matrices
         for (j = 0; j < M; j += 8) {
             // transpose upper two 4*4 matrices
             for (p = 0; p < 4; p++) {
