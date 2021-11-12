@@ -31,72 +31,13 @@ void trans_64(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
-    int interval = 8;
-    int gap = 4;
-    int startX,startY;	
-    
     if (M == 32) {
         trans_32(M, N, A, B);
     } else if (M == 64) {
-        for (startY = 0; startY < M; startY += interval)
-            for (startX = 0; startX < N; startX += interval){
-                int nowX = startY;
-                int nowY = startX;
-                
-                int nextX = nowX;
-                int nextY = nowY;
-                
-                do{ 
-                    nextY += interval;
-                    if (nextY >= N){
-                        nextX += interval;
-                        nextY -= N;
-                    }
-                } while (startY == nextY);
-
-                int nextX_2 = nextX;
-                int nextY_2 = nextY;
-
-                do{ 
-                    nextY_2 += interval;
-                    if (nextY_2 >= N){
-                        nextX_2 += interval;
-                        nextY_2 -= N;				
-                    }
-                } while (startY == nextY_2);
-
-                if (nextX >= M){
-                    for (int i = 0; i < interval; i++)
-                        for (int j = 0; j < interval; j++)
-                            B[nowX + j][nowY + i] = A[startX + i][startY + j];			
-                } else {
-                    for (int i = 0; i < gap; i++)
-                        for (int j = 0; j < interval; j++)
-                            B[nextX + i][nextY + j] = A[startX + i][startY + j];			
-                    
-                    for (int i = 0; i < gap; i++)
-                        for (int j = 0; j < interval; j++)
-                            B[nextX_2 + i][nextY_2 + j] = A[startX + gap + i][startY + j];		
-
-                    for (int i = 0; i < gap; i++)
-                        for (int j = 0; j < gap; j++){
-                            B[nowX + j][nowY + i] = B[nextX + i][nextY + j];
-                            B[nowX + j][nowY + gap + i] = B[nextX_2 + i][nextY_2 + j];	
-                        }
-                    
-                    for (int i = 0; i < gap; i++)
-                        for (int j = 0; j < gap; j++){
-                            B[nowX + gap + j][nowY + i] = B[nextX + i][nextY + gap + j];
-                            B[nowX + gap + j][nowY + gap + i] = B[nextX_2 + i][nextY_2 + gap + j];	
-                        }			
-                }
-                
-            }		
-        // trans_64(M, N, A, B);
+        trans_64(M, N, A, B);
     } else {
         trans_61(M, N, A, B);
     }
-
 }
 
 void trans_32(int M, int N, int A[N][M], int B[M][N])
@@ -128,78 +69,68 @@ void trans_32(int M, int N, int A[N][M], int B[M][N])
 
 void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
-    int i, j, p, q, k, r, tmp;
-    for (i = 0; i < M; i += 8) {
-        for (j = 0; j < N; j += 8) {
-            // transpose all 4*4 matrices by dividing upper and lower half
-            for (r = 0; r < 2; r++) {
-                // move A(i, j) to B(j, i)
-                for (p = 0; p < 2; p++) {   // move A's 1, 2 rows to B's 3, 4 rows
-                    for (q = 0; q < 8; q++) {
-                        B[j+2+p +4*r][i+q] = A[i+p +4*r][j+q];
-                    }
-                }
-                for (p = 0; p < 2; p++) {   // move A's 3, 4 rows to B's 1, 2 rows
-                    for (q = 0; q < 8; q++) {
-                        B[j+p +4*r][i+q] = A[i+2+p +4*r][j+q];
-                    }
-                }
-                for (p = 0; p < 2; p++) {   // swap B's 1, 2 rows and 3, 4 rows
-                    for (q = 0; q < 8; q++) {
-                        tmp = B[j+p +4*r][i+q];
-                        B[j+p +4*r][i+q] = B[j+2+p +4*r][i+q];
-                        B[j+2+p +4*r][i+q] = tmp;
-                    }
-                }
+    int ax, ay, bx, by, next_x, next_y, next_x2, next_y2;
+    int p, q;
 
-                // transpose two 4*4 matrices
-                for (k = 0; k < 2; k++) {
-                    for (p = 0; p < 4; p++) {
-                        for (q = p+1; q < 4; q++) {
-                            tmp = B[j+p +4*r][i+q +k*4];
-                            B[j+p +4*r][i+q +k*4] = B[j+q +4*r][i+p +k*4];
-                            B[j+q +4*r][i+p +k*4] = tmp;
-                        }
-                    }
-                }
-
-                if (r == 0) {
-                    for (p = 0; p < 2; p++) {   // swap B's 1, 2 rows and 3, 4 rows
-                        for (q = 4; q < 8; q++) {
-                            tmp = B[j+p +4*r][i+q];
-                            B[j+p +4*r][i+q] = B[j+2+p +4*r][i+q];
-                            B[j+2+p +4*r][i+q] = tmp;
-                        }
-                    }
-                } else {
-                    for (p = 0; p < 2; p++) {   // swap B's 1, 2 rows and 3, 4 rows
-                        for (q = 0; q < 4; q++) {
-                            tmp = B[j+p +4*r][i+q];
-                            B[j+p +4*r][i+q] = B[j+2+p +4*r][i+q];
-                            B[j+2+p +4*r][i+q] = tmp;
-                        }
-                    }
-                }
+    for (ay = 0; ay < M; ay += 8) { // access a by row-major
+        for (ax = 0; ax < N; ax += 8) {
+            // compute b index and next indices
+            bx = ay; by = ax;
+            
+            next_y = by + 8;
+            next_x = bx;
+            if (next_y >= N) {
+                next_x += 8;
+                next_y -= N;
             }
 
-            for (p = 0; p < 2; p++) {
-                for (q = 0; q < 4; q++) {
-                    tmp = B[j+p + 4][i+q];
-                    B[j+p + 4][i+q] = B[j+p + 2][i+q + 4];
-                    B[j+p + 2][i+q + 4] = tmp;
-                }
+            next_y2 = next_y + 8;
+            next_x2 = next_x2;
+            if (next_y2 >= N) {
+                next_x2 += 8;
+                next_y2 -= N;
             }
 
-            for (p = 0; p < 2; p++) {
-                for (q = 0; q < 4; q++) {
-                    tmp = B[j+p + 6][i+q];
-                    B[j+p + 6][i+q] = B[j+p][i+q + 4];
-                    B[j+p][i+q + 4] = tmp;
+            if (next_x2 >= M) {
+                for (p = 0; p < 8; p++) {
+                    for (q = 0; q < 8; q++) {
+                        B[bx + q][by + p] = A[ax + p][ay + q];
+                    }
                 }
+            } else {
+                // move A to next Bs
+                for (p = 0; p < 4; p++) {
+                    for (q = 0; q < 8; q++) {
+                        B[next_x + p][next_y + q] = A[ax + p][ay + q];
+                    }
+                }
+
+                for (p = 0; p < 4; p++) {
+                    for (q = 0; q < 8; q++) {
+                        B[next_x2 + p][next_y2 + q] = A[ax + 4 + p][ay + q];
+                    }
+                }   
+
+                // move nextBs to currentB
+                for (p = 0; p < 4; p++) {
+                    for (q = 0; q < 4; q++) {
+                        B[bx + q][by + p] = B[next_x + p][next_y + q];
+                        B[bx + q][by + 4 + p] = B[next_x2 + p][next_y2 + q];
+                    }
+                }
+
+                for (p = 0; p < 4; p++) {
+                    for (q = 0; q < 4; q++) {
+                        B[bx + 4 + q][by + p] = B[next_x + p][next_y + 4 + q];
+                        B[bx + 4 + q][by + 4 + p] = B[next_x2 + p][next_y2 + 4 + q];
+                    }
+                }   
             }
+
         }
     }
 }
+
 
 void trans_61(int M, int N, int A[N][M], int B[M][N])
 {
