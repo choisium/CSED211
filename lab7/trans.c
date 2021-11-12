@@ -77,19 +77,25 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
             // compute b index and next indices
             bx = ay; by = ax;
             
-            next_y = by + 8;
+            next_y = by;
             next_x = bx;
-            if (next_y >= N) {
-                next_x += 8;
-                next_y -= N;
-            }
+            do {
+                next_y += 8;
+                if (next_y >= N) {
+                    next_x += 8;
+                    next_y -= N;
+                }
+            } while (ay == next_y);
 
-            next_y2 = next_y + 8;
+            next_y2 = next_y;
             next_x2 = next_x2;
-            if (next_y2 >= N) {
-                next_x2 += 8;
-                next_y2 -= N;
-            }
+            do {
+                next_y2 += 8;
+                if (next_y2 >= N) {
+                    next_x2 += 8;
+                    next_y2 -= N;
+                }
+            } while (ay == next_y2);
 
             if (next_x2 >= M) {
                 for (p = 0; p < 8; p++) {
