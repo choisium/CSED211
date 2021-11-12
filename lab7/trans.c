@@ -16,14 +16,10 @@
 #include <stdio.h>
 #include "cachelab.h"
 
-#define M 64
-#define N 64
-
-int is_transpose(int A[N][M], int B[M][N]);
-// void trans_32(int M, int N, int A[N][M], int B[M][N]);
-// void trans_61(int M, int N, int A[N][M], int B[M][N]);
-void trans_64(int A[N][M], int B[M][N]);
-void print(int B[M][N]);
+int is_transpose(int M, int N, int A[N][M], int B[M][N]);
+void trans_32(int M, int N, int A[N][M], int B[M][N]);
+void trans_61(int M, int N, int A[N][M], int B[M][N]);
+void trans_64(int M, int N, int A[N][M], int B[M][N]);
 
 /* 
  * transpose_submit - This is the solution transpose function that you
@@ -33,46 +29,46 @@ void print(int B[M][N]);
  *     be graded. 
  */
 char transpose_submit_desc[] = "Transpose submission";
-// void transpose_submit(int M, int N, int A[N][M], int B[M][N])
-// {
-//     if (M == 32) {
-//         trans_32(M, N, A, B);
-//     } else if (M == 61) {
-//         trans_61(M, N, A, B);
-//     } else {
-//         trans_64(M, N, A, B);
-//     }
+void transpose_submit(int M, int N, int A[N][M], int B[M][N])
+{
+    if (M == 32) {
+        trans_32(M, N, A, B);
+    } else if (M == 61) {
+        trans_61(M, N, A, B);
+    } else {
+        trans_64(M, N, A, B);
+    }
 
-// }
+}
 
-// void trans_32(int M, int N, int A[N][M], int B[M][N])
-// {
-//     int i, j, p, q, K = 8;
-//     int diag, d, diag_exists;
+void trans_32(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j, p, q, K = 8;
+    int diag, d, diag_exists;
 
-//     for (i = 0; i < N; i += K) {
-//         for (j = 0; j < M; j += K) {
-//             for (p = i; p < (i + K < N? i + K: N); p++) {
-//                 diag_exists = 0;
-//                 for (q = j; q < (j + K < M? j + K: M); q++) {
-//                     if (p == q) {
-//                         diag_exists = 1;
-//                         d = p;
-//                         diag = A[p][q];
-//                     } else {
-//                         B[q][p] = A[p][q];
-//                     }
-//                 }
-//                 if (diag_exists) {
-//                     B[d][d] = diag;
-//                 }
-//             }
-//         }
-//     }
-// }
+    for (i = 0; i < N; i += K) {
+        for (j = 0; j < M; j += K) {
+            for (p = i; p < (i + K < N? i + K: N); p++) {
+                diag_exists = 0;
+                for (q = j; q < (j + K < M? j + K: M); q++) {
+                    if (p == q) {
+                        diag_exists = 1;
+                        d = p;
+                        diag = A[p][q];
+                    } else {
+                        B[q][p] = A[p][q];
+                    }
+                }
+                if (diag_exists) {
+                    B[d][d] = diag;
+                }
+            }
+        }
+    }
+}
 
 
-void trans_64(int A[N][M], int B[M][N])
+void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
     // 무조건 row-major로 접근하도록 해야 될듯
     // 캐시에 저장되는 방식 - 한 block에 8개, 총 set은 32개
@@ -105,24 +101,7 @@ void trans_64(int A[N][M], int B[M][N])
             }
         }
     }
-    print(B);
-    // 아래는 8*8에서의 set을 나타냄
-    //  0  1  2  3  4  5  6  7
-    //  8  9 10 11 12 13 14 15
-    // 16 17 18 19 20 21 22 23
-    // 24 25 26 27 28 29 30 31
-    //  0  1  2  3  4  5  6  7
-    //  8  9 10 11 12 13 14 15
-    // 16 17 18 19 20 21 22 23
-    // 24 25 26 27 28 29 30 31
-    //  0  1  2  3  4  5  6  7
-    //  8  9 10 11 12 13 14 15
-    // 16 17 18 19 20 21 22 23
-    // 24 25 26 27 28 29 30 31
-    //  0  1  2  3  4  5  6  7
-    //  8  9 10 11 12 13 14 15
-    // 16 17 18 19 20 21 22 23
-    // 24 25 26 27 28 29 30 31
+    
     // Do transpose in every 8*8 matrices
     for (i = 0; i < N; i += 8) {
         for (j = 0; j < M; j += 8) {
@@ -139,7 +118,6 @@ void trans_64(int A[N][M], int B[M][N])
                     B[i+q][j+4+p] = tmp;
                 }
             }
-            if (i == 0 && j == 0) print(B);
             // transpose lower two 4*4 matrices
             for (p = 0; p < 4; p++) {
                 for (q = p+1; q < 4; q++) {
@@ -153,7 +131,6 @@ void trans_64(int A[N][M], int B[M][N])
                     B[i+4+q][j+4+p] = tmp;
                 }
             }
-            if (i == 0 && j == 0) print(B);
             // swap upper right 4*4 matrix and lower left 4*4 matrix
             for (p = 0; p < 2; p++) { // 0, 1 row -> 6, 7 row
                 for (q = 0; q < 4; q++) {
@@ -162,7 +139,6 @@ void trans_64(int A[N][M], int B[M][N])
                     B[i+6+p][j+q] = tmp;
                 }
             }
-            if (i == 0 && j == 0) print(B);
             for (p = 2; p < 4; p++) { // 2, 3 row -> 4, 5 row
                 for (q = 0; q < 4; q++) {
                     tmp = B[i+p][j+4+q];
@@ -170,7 +146,6 @@ void trans_64(int A[N][M], int B[M][N])
                     B[i+2+p][j+q] = tmp;
                 }
             }
-            if (i == 0 && j == 0) print(B);
             for (p = 0; p < 2; p++) { // swap 0, 1 row with 2, 3 row
                 for (q = 0; q < 4; q++) {
                     tmp = B[i+p][j+4+q];
@@ -178,7 +153,6 @@ void trans_64(int A[N][M], int B[M][N])
                     B[i+2+p][j+4+q] = tmp;
                 }
             }
-            if (i == 0 && j == 0) print(B);
             for (p = 4; p < 6; p++) { // swap 4, 5 row with 6, 7 row
                 for (q = 0; q < 4; q++) {
                     tmp = B[i+p][j+q];
@@ -186,7 +160,6 @@ void trans_64(int A[N][M], int B[M][N])
                     B[i+2+p][j+q] = tmp;
                 }
             }
-            if (i == 0 && j == 0) print(B);
         }
     }
 
@@ -204,77 +177,77 @@ void trans_64(int A[N][M], int B[M][N])
     }
 }
 
-// void trans_61(int M, int N, int A[N][M], int B[M][N])
-// {
-//     int i, j, p, q, K = 16;
-//     int diag, d, diag_exists;
+void trans_61(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j, p, q, K = 16;
+    int diag, d, diag_exists;
 
-//     for (i = 0; i < N; i += K) {
-//         for (j = 0; j < M; j += K) {
-//             for (p = i; p < (i + K < N? i + K: N); p++) {
-//                 diag_exists = 0;
-//                 for (q = j; q < (j + K < M? j + K: M); q++) {
-//                     if (p == q) {
-//                         diag_exists = 1;
-//                         d = p;
-//                         diag = A[p][q];
-//                     } else {
-//                         B[q][p] = A[p][q];
-//                     }
-//                 }
-//                 if (diag_exists) {
-//                     B[d][d] = diag;
-//                 }
-//             }
-//         }
-//     }
-// }
+    for (i = 0; i < N; i += K) {
+        for (j = 0; j < M; j += K) {
+            for (p = i; p < (i + K < N? i + K: N); p++) {
+                diag_exists = 0;
+                for (q = j; q < (j + K < M? j + K: M); q++) {
+                    if (p == q) {
+                        diag_exists = 1;
+                        d = p;
+                        diag = A[p][q];
+                    } else {
+                        B[q][p] = A[p][q];
+                    }
+                }
+                if (diag_exists) {
+                    B[d][d] = diag;
+                }
+            }
+        }
+    }
+}
 
-// /* 
-//  * You can define additional transpose functions below. We've defined
-//  * a simple one below to help you get started. 
-//  */ 
+/* 
+ * You can define additional transpose functions below. We've defined
+ * a simple one below to help you get started. 
+ */ 
 
-// /* 
-//  * trans - A simple baseline transpose function, not optimized for the cache.
-//  */
-// char trans_desc[] = "Simple row-wise scan transpose";
-// void trans(int M, int N, int A[N][M], int B[M][N])
-// {
-//     int i, j, tmp;
+/* 
+ * trans - A simple baseline transpose function, not optimized for the cache.
+ */
+char trans_desc[] = "Simple row-wise scan transpose";
+void trans(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j, tmp;
 
-//     for (i = 0; i < N; i++) {
-//         for (j = 0; j < M; j++) {
-//             tmp = A[i][j];
-//             B[j][i] = tmp;
-//         }
-//     }    
+    for (i = 0; i < N; i++) {
+        for (j = 0; j < M; j++) {
+            tmp = A[i][j];
+            B[j][i] = tmp;
+        }
+    }    
 
-// }
+}
 
-// /*
-//  * registerFunctions - This function registers your transpose
-//  *     functions with the driver.  At runtime, the driver will
-//  *     evaluate each of the registered functions and summarize their
-//  *     performance. This is a handy way to experiment with different
-//  *     transpose strategies.
-//  */
-// void registerFunctions()
-// {
-//     /* Register your solution function */
-//     registerTransFunction(transpose_submit, transpose_submit_desc); 
+/*
+ * registerFunctions - This function registers your transpose
+ *     functions with the driver.  At runtime, the driver will
+ *     evaluate each of the registered functions and summarize their
+ *     performance. This is a handy way to experiment with different
+ *     transpose strategies.
+ */
+void registerFunctions()
+{
+    /* Register your solution function */
+    registerTransFunction(transpose_submit, transpose_submit_desc); 
 
-//     /* Register any additional transpose functions */
-//     registerTransFunction(trans, trans_desc); 
+    /* Register any additional transpose functions */
+    registerTransFunction(trans, trans_desc); 
 
-// }
+}
 
 /* 
  * is_transpose - This helper function checks if B is the transpose of
  *     A. You can check the correctness of your transpose by calling
  *     it before returning from the transpose function.
  */
-int is_transpose(int A[N][M], int B[M][N])
+int is_transpose(int M, int N, int A[N][M], int B[M][N])
 {
     int i, j;
 
@@ -286,31 +259,4 @@ int is_transpose(int A[N][M], int B[M][N])
         }
     }
     return 1;
-}
-
-void print(int B[M][N]) {
-    int i, j;
-    for (i = 0; i < 8; i++) {
-        for (j = 0; j < 8; j++) {
-            printf("%5d  ", B[i][j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
-int main() {
-    int A[N][M], B[M][N];
-    int i, j;
-
-    for (i = 0; i < M; i++) {
-        for (j = 0; j < M; j++) {
-            A[i][j] = i * 1000 + j;
-        }
-    }
-
-    print(A);
-    trans_64(A, B);
-    print(B);
-    printf("%d\n", is_transpose(A, B));
 }
