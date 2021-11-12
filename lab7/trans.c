@@ -70,107 +70,73 @@ void trans_32(int M, int N, int A[N][M], int B[M][N])
 
 void trans_64(int M, int N, int A[N][M], int B[M][N])
 {
-    // 무조건 row-major로 접근하도록 해야 될듯
-    // 캐시에 저장되는 방식 - 한 block에 8개, 총 set은 32개
-    // 아래는 block의 개수 및 set에 들어가는걸 나타냄.
-    //  0  1  2  3  4  5  6  7
-    //  8  9 10 11 12 13 14 15
-    // 16 17 18 19 20 21 22 23
-    // 24 25 26 27 28 29 30 31
-    // 이렇게 4줄씩 set에 딱 들어감. 총 64줄이 있음.
-    // 따라서 4줄 단위로 처리해야 함
-    int i, j, k, p, q, tmp;
+    int i, j, p, q, k, r, tmp;
+    for (i = 0; i < M; i += 8) {
+        for (j = 0; j < N; j += 8) {
+            // transpose all 4*4 matrices by dividing upper and lower half
+            for (r = 0; r < 2; r++) {
+                // move A(i, j) to B(j, i)
+                for (p = 0; p < 2; p++) {   // move A's 1, 2 rows to B's 3, 4 rows
+                    for (q = 0; q < 8; q++) {
+                        B[j+2+p +4*r][i+q] = A[i+p +4*r][j+q];
+                    }
+                }
+                for (p = 0; p < 2; p++) {   // move A's 3, 4 rows to B's 1, 2 rows
+                    for (q = 0; q < 8; q++) {
+                        B[j+p +4*r][i+q] = A[i+2+p +4*r][j+q];
+                    }
+                }
+                for (p = 0; p < 2; p++) {   // swap B's 1, 2 rows and 3, 4 rows
+                    for (q = 0; q < 8; q++) {
+                        tmp = B[j+p +4*r][i+q];
+                        B[j+p +4*r][i+q] = B[j+2+p +4*r][i+q];
+                        B[j+2+p +4*r][i+q] = tmp;
+                    }
+                }
 
-    for (i = 0; i < N; i += 8) {
-        // Move A to B
-        for (p = 0; p < 2; p++) {
-            // Move A's first 4 rows to B's first 4 rows.
-            for (k = 0; k < 2; k++) {
-                // load A's 1, 2 rows to B's 3, 4 rows
-                for (j = 0; j < M; j++) {   // 32 miss
-                    B[i+2+k+p*4][j] = A[i+k+p*4][j];
+                // transpose two 4*4 matrices
+                for (k = 0; k < 2; k++) {
+                    for (p = 0; p < 4; p++) {
+                        for (q = p+1; q < 4; q++) {
+                            tmp = B[j+p +4*r][i+q +k*4];
+                            B[j+p +4*r][i+q +k*4] = B[j+q +4*r][i+p +k*4];
+                            B[j+q +4*r][i+p +k*4] = tmp;
+                        }
+                    }
                 }
-                // load A's 3, 4 rows to B's 1, 2 rows
-                for (j = 0; j < M; j++) {   // 32 miss
-                    B[i+k+p*4][j] = A[i+2+k+p*4][j];
-                }
-                // swap B's 3, 4 rows with 1, 2 rows.
-                for (j = 0; j < M; j++) {   // 16 miss
-                    tmp = B[i+k+p*4][j];
-                    B[i+k+p*4][j] = B[i+2+k+p*4][j];
-                    B[i+2+k+p*4][j] = tmp;
-                }
-            }
-        }
 
-        // Do transpose in every 8*8 matrices
-        for (j = 0; j < M; j += 8) {
-            // transpose upper two 4*4 matrices
-            for (p = 0; p < 4; p++) {
-                for (q = p+1; q < 4; q++) {
-                    tmp = B[i+p][j+q];
-                    B[i+p][j+q] = B[i+q][j+p];
-                    B[i+q][j+p] = tmp;
-                }
-                for (q = p+1; q < 4; q++) {
-                    tmp = B[i+p][j+4+q];
-                    B[i+p][j+4+q] = B[i+q][j+4+p];
-                    B[i+q][j+4+p] = tmp;
-                }
-            }
-            // transpose lower two 4*4 matrices
-            for (p = 0; p < 4; p++) {
-                for (q = p+1; q < 4; q++) {
-                    tmp = B[i+4+p][j+q];
-                    B[i+4+p][j+q] = B[i+4+q][j+p];
-                    B[i+4+q][j+p] = tmp;
-                }
-                for (q = p+1; q < 4; q++) {
-                    tmp = B[i+4+p][j+4+q];
-                    B[i+4+p][j+4+q] = B[i+4+q][j+4+p];
-                    B[i+4+q][j+4+p] = tmp;
+                if (r == 0) {
+                    for (p = 0; p < 2; p++) {   // swap B's 1, 2 rows and 3, 4 rows
+                        for (q = 4; q < 8; q++) {
+                            tmp = B[j+p +4*r][i+q];
+                            B[j+p +4*r][i+q] = B[j+2+p +4*r][i+q];
+                            B[j+2+p +4*r][i+q] = tmp;
+                        }
+                    }
+                } else {
+                    for (p = 0; p < 2; p++) {   // swap B's 1, 2 rows and 3, 4 rows
+                        for (q = 0; q < 4; q++) {
+                            tmp = B[j+p +4*r][i+q];
+                            B[j+p +4*r][i+q] = B[j+2+p +4*r][i+q];
+                            B[j+2+p +4*r][i+q] = tmp;
+                        }
+                    }
                 }
             }
-            // swap upper right 4*4 matrix and lower left 4*4 matrix
-            for (p = 0; p < 2; p++) { // 0, 1 row -> 6, 7 row
-                for (q = 0; q < 4; q++) {
-                    tmp = B[i+p][j+4+q];
-                    B[i+p][j+4+q] = B[i+6+p][j+q];
-                    B[i+6+p][j+q] = tmp;
-                }
-            }
-            for (p = 2; p < 4; p++) { // 2, 3 row -> 4, 5 row
-                for (q = 0; q < 4; q++) {
-                    tmp = B[i+p][j+4+q];
-                    B[i+p][j+4+q] = B[i+2+p][j+q];
-                    B[i+2+p][j+q] = tmp;
-                }
-            }
-            for (p = 0; p < 2; p++) { // swap 0, 1 row with 2, 3 row
-                for (q = 0; q < 4; q++) {
-                    tmp = B[i+p][j+4+q];
-                    B[i+p][j+4+q] = B[i+2+p][j+4+q];
-                    B[i+2+p][j+4+q] = tmp;
-                }
-            }
-            for (p = 4; p < 6; p++) { // swap 4, 5 row with 6, 7 row
-                for (q = 0; q < 4; q++) {
-                    tmp = B[i+p][j+q];
-                    B[i+p][j+q] = B[i+2+p][j+q];
-                    B[i+2+p][j+q] = tmp;
-                }
-            }
-        }
-    }
 
-    // swap 8*8 matrices
-    for (i = 0; i < N; i += 8) {
-        for (j = i + 8; j < M; j += 8) {
-            for (p = 0; p < 8; p++) {
-                for (q = 0; q < 8; q++) {
-                    tmp = B[i+p][j+q];
-                    B[i+p][j+q] = B[j+p][i+q];
-                    B[j+p][i+q] = tmp;
+            for (p = 0; p < 2; p++) {
+                for (q = 0; q < 4; q++) {
+                    tmp = B[j+p + 4][i+q];
+                    B[j+p + 4][i+q] = B[j+p + 2][i+q + 4];
+                    B[j+p + 2][i+q + 4] = tmp;
+                }
+            }
+
+            for (p = 0; p < 2; p++) {
+                for (q = 0; q < 4; q++) {
+                    tmp = B[j+p + 6][i+q];
+                    B[j+p + 6][i+q] = B[j+p][i+q + 4];
+                    B[j+p][i+q + 4] = tmp;
                 }
             }
         }
