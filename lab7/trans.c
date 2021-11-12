@@ -81,23 +81,25 @@ void trans_64(int M, int N, int A[N][M], int B[M][N])
     // 따라서 4줄 단위로 처리해야 함
     int i, j, k, p, q, tmp;
 
-    // Move A to B
-    for (i = 0; i < N; i += 4) {
-        // Move A's first 4 rows to B's first 4 rows.
-        for (k = 0; k < 2; k++) {
-            // load A's 1, 2 rows to B's 3, 4 rows
-            for (j = 0; j < M; j++) {   // 32 miss
-                B[i+2+k][j] = A[i+k][j];
-            }
-            // load A's 3, 4 rows to B's 1, 2 rows
-            for (j = 0; j < M; j++) {   // 32 miss
-                B[i+k][j] = A[i+2+k][j];
-            }
-            // swap B's 3, 4 rows with 1, 2 rows.
-            for (j = 0; j < M; j++) {   // 16 miss
-                tmp = B[i+k][j];
-                B[i+k][j] = B[i+2+k][j];
-                B[i+2+k][j] = tmp;
+    for (i = 0; i < N; i += 8) {
+        // Move A to B
+        for (p = 0; p < 2; p++) {
+            // Move A's first 4 rows to B's first 4 rows.
+            for (k = 0; k < 2; k++) {
+                // load A's 1, 2 rows to B's 3, 4 rows
+                for (j = 0; j < M; j++) {   // 32 miss
+                    B[i+2+k+p*4][j] = A[i+k+p*4][j];
+                }
+                // load A's 3, 4 rows to B's 1, 2 rows
+                for (j = 0; j < M; j++) {   // 32 miss
+                    B[i+k+p*4][j] = A[i+2+k+p*4][j];
+                }
+                // swap B's 3, 4 rows with 1, 2 rows.
+                for (j = 0; j < M; j++) {   // 16 miss
+                    tmp = B[i+k+p*4][j];
+                    B[i+k+p*4][j] = B[i+2+k+p*4][j];
+                    B[i+2+k+p*4][j] = tmp;
+                }
             }
         }
 
