@@ -1,7 +1,9 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your name and login ID here>
+ * Name: Choi Soomin
+ * Student ID: 20160169
+ * Login ID: choisium>
  */
 #include <stdio.h>
 #include <stdlib.h>
