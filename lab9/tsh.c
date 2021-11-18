@@ -167,6 +167,44 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+    char *argv[MAXARGS];
+    char buf[MAXLINE];
+    int bg;
+    int pid;
+
+    /* Parse command line */
+    strcpy(buf, cmdline);
+    bg = parseline(buf, argv);
+
+    /* Ignore empty line */
+    if (argv[0] == NULL)
+        return;
+
+
+    if (!builtin_cmd(argv)) {
+        int state = bg == 1? BG: FG;
+        int jid;
+
+        if ((pid = fork()) == 0) {
+            /* Child runs user job */
+            if (execve(argv[0], argv, environ) < 0) {
+                printf("%s: Command not found\n", argv[0]);
+                exit(0);
+            }
+        }
+
+        jid = addjob(jobs, pid, state, cmdline);
+
+        if (!bg) {
+            int status;
+            if (waitpid(pid, &status, 0) < 0) {
+                unix_error("wait: waitpid error");
+            }
+        } else {
+	        printf("[%d] (%d) %s\n", jid, pid, cmdline);
+        }
+
+    }
     return;
 }
 
@@ -233,7 +271,23 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
-    return 0;     /* not a builtin command */
+    int is_builtin = 0;
+    if (strcmp(argv[0], "quit") == 0) {
+        exit(0);
+    }
+    if (strcmp(argv[0], "fg") == 0) {
+        do_bgfg(argv);
+        return 1;
+    }
+    if (strcmp(argv[0], "bg") == 0) {
+        do_bgfg(argv);
+        return 1;
+    }
+    if (strcmp(argv[0], "jobs") == 0) {
+        listjobs(jobs);
+        return 1;
+    }
+    return is_builtin;     /* not a builtin command */
 }
 
 /* 
