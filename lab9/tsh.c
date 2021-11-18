@@ -329,7 +329,15 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
-    return;
+    if(verbose) printf("sigint_handler: entering\n");
+
+    pid_t pid = fgpid(jobs);
+    if (kill(pid, SIGINT) < 0) {
+        unix_error("kill: kill error");
+        exit(1);
+    }
+
+    if(verbose) printf("sigint_handler: Job (%d) killed\n", pid);
 }
 
 /*
