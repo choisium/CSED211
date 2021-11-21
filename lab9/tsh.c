@@ -326,7 +326,37 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
-    return;
+    if(verbose) printf("sigchld_handler: entering\n");
+
+    int status = -1;
+    int pid;
+
+
+    // sigstop인 애가 안걸림..! sigstop
+    if ((pid = waitpid(-1, &status, WUNTRACED | WNOHANG)) > 0) {
+        struct job_t* job = getjobpid(jobs, pid);
+        int jid = job->jid;
+        printf("jid: %d, status: %d\n", job->jid, status);
+
+        if (WIFEXITED(status)) {
+            deletejob(jobs, pid);
+            if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
+            if(verbose) printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", jid, pid, status);
+        } else if (WIFSIGNALED(status)) {
+            if(verbose) printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, status);
+            deletejob(jobs, pid);
+            if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
+        } else if (WIFSTOPPED(status)) {
+            if(verbose) printf("Job [%d] (%d) stopped by signal %d\n", jid, pid, status);
+            struct job_t* job = getjobpid(jobs, pid);
+            job->state = ST;
+        } else {
+            deletejob(jobs, pid);
+            if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted default\n", jid, pid);
+        }
+    }
+
+    if(verbose) printf("sigchld_handler: exiting\n");
 }
 
 /* 
