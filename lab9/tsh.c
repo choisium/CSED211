@@ -339,12 +339,16 @@ void sigint_handler(int sig)
     if(verbose) printf("sigint_handler: entering\n");
 
     pid_t pid = fgpid(jobs);
-    if (kill(pid, SIGINT) < 0) {
-        unix_error("kill: kill error");
-        exit(1);
+    if (pid != 0) {
+        if (kill(pid, SIGINT) < 0) {
+            unix_error("kill: kill SIGINT error");
+            exit(1);
+        }
+
+        if(verbose) printf("sigint_handler: Job (%d) killed\n", pid);
     }
 
-    if(verbose) printf("sigint_handler: Job (%d) killed\n", pid);
+    if(verbose) printf("sigint_handler: exiting\n");
 }
 
 /*
@@ -354,7 +358,19 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
-    return;
+    if(verbose) printf("sigtstp_handler: entering\n");
+
+    pid_t pid = fgpid(jobs);
+    if (pid != 0) {
+        if (kill(pid, SIGTSTP) < 0) {
+            unix_error("kill: kill SIGTSTP error");
+            exit(1);
+        }
+
+        if(verbose) printf("sigtstp_handler: Job [%d] (%d) stopped\n", pid2jid(pid), pid);
+    }
+
+    if(verbose) printf("sigtstp_handler: exiting\n");
 }
 
 /*********************
