@@ -291,6 +291,24 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+    int is_fg = strcmp(argv[0], "fg") == 0;
+    int is_pid = argv[1][0] != '%';
+    int id = is_pid? atoi(argv[1]): atoi(&argv[1][1]);
+    struct job_t* job = is_pid? getjobpid(jobs, id): getjobjid(jobs, id);
+
+    if (job == NULL) {
+        printf("wrong id!\n");
+        return;
+    }
+    if (kill(job->pid, SIGCONT) < 0) {
+        unix_error("kill: kill SIGINT error");
+        exit(1);
+    }
+
+    if (is_fg) {
+        waitfg(job->pid);
+    }
+
     return;
 }
 
