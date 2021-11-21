@@ -196,14 +196,10 @@ void eval(char *cmdline)
         jid = addjob(jobs, pid, state, cmdline);
 
         if (!bg) {
-            int status;
-            if (waitpid(pid, &status, 0) < 0) {
-                unix_error("wait: waitpid error");
-            }
+            waitfg(pid);
         } else {
 	        printf("[%d] (%d) %s\n", jid, pid, cmdline);
         }
-
     }
     return;
 }
@@ -303,7 +299,18 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    return;
+    printf("waitfg\n");
+    struct job_t* job = NULL;
+
+    int count = 0;
+
+    do {
+        job = getjobpid(jobs, pid);
+        printf("waiting? %d\n", job->state);
+        sleep(1);
+        count++;
+    } while (job && job->state == FG && count < 10);
+    if (verbose) printf("waitfg: Process (%d) no longer the fg process\n", pid);
 }
 
 /*****************
