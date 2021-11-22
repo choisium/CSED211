@@ -171,6 +171,7 @@ void eval(char *cmdline)
     char buf[MAXLINE];
     int bg;
     int pid;
+    sigset_t mask_all, mask_one, prev_one;
 
     /* Parse command line */
     strcpy(buf, cmdline);
@@ -180,20 +181,27 @@ void eval(char *cmdline)
     if (argv[0] == NULL)
         return;
 
+    sigfillset(&mask_all);
+    sigemptyset(&mask_one);
+    sigaddset(&mask_one, SIGCHLD);
 
     if (!builtin_cmd(argv)) {
         int state = bg == 1? BG: FG;
         int jid;
 
+        sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
+
         if ((pid = fork()) == 0) {
+            sigprocmask(SIG_SETMASK, &prev_one, NULL);
             /* Child runs user job */
             if (execve(argv[0], argv, environ) < 0) {
                 printf("%s: Command not found\n", argv[0]);
                 exit(0);
             }
         }
-
+        sigprocmask(SIG_BLOCK, &mask_all, NULL);
         jid = addjob(jobs, pid, state, cmdline);
+        sigprocmask(SIG_SETMASK, &prev_one, NULL);
 
         if (!bg) {
             waitfg(pid);
@@ -348,6 +356,8 @@ void sigchld_handler(int sig)
 
     int status = -1;
     int pid;
+    sigset_t mask_all, prev_all;
+    sigfillset(&mask_all);
 
 
     // sigstop인 애가 안걸림..! sigstop
@@ -357,19 +367,25 @@ void sigchld_handler(int sig)
         printf("jid: %d, status: %d\n", job->jid, status);
 
         if (WIFEXITED(status)) {
+            sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
+            sigprocmask(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", jid, pid, status);
         } else if (WIFSIGNALED(status)) {
             if(verbose) printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, status);
+            sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
+            sigprocmask(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
         } else if (WIFSTOPPED(status)) {
             if(verbose) printf("Job [%d] (%d) stopped by signal %d\n", jid, pid, status);
             struct job_t* job = getjobpid(jobs, pid);
             job->state = ST;
         } else {
+            sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
+            sigprocmask(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted default\n", jid, pid);
         }
     }
