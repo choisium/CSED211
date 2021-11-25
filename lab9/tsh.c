@@ -300,21 +300,46 @@ int builtin_cmd(char **argv)
 void do_bgfg(char **argv) 
 {
     int is_fg = strcmp(argv[0], "fg") == 0;
-    int is_pid = argv[1][0] != '%';
-    int id = is_pid? atoi(argv[1]): atoi(&argv[1][1]);
-    struct job_t* job = is_pid? getjobpid(jobs, id): getjobjid(jobs, id);
-
-    if (job == NULL) {
-        printf("wrong id!\n");
+    if (argv[1] == NULL) {
+        printf("%s command requires PID or %%jobid argument\n", is_fg? "fg": "bg");
         return;
     }
+
+    int is_pid = argv[1][0] != '%';
+    int id = is_pid? atoi(argv[1]): atoi(&argv[1][1]);
+    if (id == 0) {
+        printf("%s: argument must be a PID or %%jobid\n", is_fg? "fg": "bg");
+        return;
+    }
+
+    struct job_t* job = is_pid? getjobpid(jobs, id): getjobjid(jobs, id);
+
+    sigset_t mask_all, prev_all;
+    sigfillset(&mask_all);
+
+    if (job == NULL) {
+        if (is_pid) {
+            printf("(%d): No such process\n", id);
+        } else {
+            printf("%%%d: No such job\n", id);
+        }
+        return;
+    }
+
+    sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
     if (kill(job->pid, SIGCONT) < 0) {
         unix_error("kill: kill SIGINT error");
         exit(1);
     }
 
     if (is_fg) {
+        job->state = FG;
+        sigprocmask(SIG_SETMASK, &prev_all, NULL);
         waitfg(job->pid);
+    } else {
+        job->state = BG;
+        printf("[%d] (%d) %s\n", job->jid, job->pid, job->cmdline);
+        sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
     return;
@@ -325,14 +350,12 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    printf("waitfg\n");
     struct job_t* job = NULL;
 
     int count = 0;
 
     do {
         job = getjobpid(jobs, pid);
-        printf("waiting? %d\n", job->state);
         sleep(1);
         count++;
     } while (job && job->state == FG && count < 10);
@@ -359,34 +382,31 @@ void sigchld_handler(int sig)
     sigset_t mask_all, prev_all;
     sigfillset(&mask_all);
 
-
-    // sigstop인 애가 안걸림..! sigstop
     if ((pid = waitpid(-1, &status, WUNTRACED | WNOHANG)) > 0) {
         struct job_t* job = getjobpid(jobs, pid);
         int jid = job->jid;
-        printf("jid: %d, status: %d\n", job->jid, status);
 
         if (WIFEXITED(status)) {
             sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
-            sigprocmask(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", jid, pid, status);
+            sigprocmask(SIG_SETMASK, &prev_all, NULL);
         } else if (WIFSIGNALED(status)) {
-            if(verbose) printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, status);
             sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
-            sigprocmask(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
+            if(verbose) printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, status);
+            sigprocmask(SIG_SETMASK, &prev_all, NULL);
         } else if (WIFSTOPPED(status)) {
-            if(verbose) printf("Job [%d] (%d) stopped by signal %d\n", jid, pid, status);
             struct job_t* job = getjobpid(jobs, pid);
-            job->state = ST;
+            job->state = ST;   // 여기도 sigprocmask 해야되려나?
+            if(verbose) printf("Job [%d] (%d) stopped by signal 20\n", jid, pid);
         } else {
             sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
-            sigprocmask(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted default\n", jid, pid);
+            sigprocmask(SIG_SETMASK, &prev_all, NULL);
         }
     }
 
@@ -402,14 +422,18 @@ void sigint_handler(int sig)
 {
     if(verbose) printf("sigint_handler: entering\n");
 
+    sigset_t mask_all, prev_all;
+    sigfillset(&mask_all);
+
     pid_t pid = fgpid(jobs);
     if (pid != 0) {
+        sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
         if (kill(pid, SIGINT) < 0) {
             unix_error("kill: kill SIGINT error");
             exit(1);
         }
-
         if(verbose) printf("sigint_handler: Job (%d) killed\n", pid);
+        sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
     if(verbose) printf("sigint_handler: exiting\n");
@@ -420,18 +444,22 @@ void sigint_handler(int sig)
  *     the user types ctrl-z at the keyboard. Catch it and suspend the
  *     foreground job by sending it a SIGTSTP.  
  */
-void sigtstp_handler(int sig) 
+void sigtstp_handler(int sig) // verbose 순서 확인 필요할듯
 {
     if(verbose) printf("sigtstp_handler: entering\n");
 
+    sigset_t mask_all, prev_all;
+    sigfillset(&mask_all);
+
     pid_t pid = fgpid(jobs);
     if (pid != 0) {
+        sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
         if (kill(pid, SIGTSTP) < 0) {
             unix_error("kill: kill SIGTSTP error");
             exit(1);
         }
-
         if(verbose) printf("sigtstp_handler: Job [%d] (%d) stopped\n", pid2jid(pid), pid);
+        sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
     if(verbose) printf("sigtstp_handler: exiting\n");
