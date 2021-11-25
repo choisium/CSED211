@@ -206,7 +206,7 @@ void eval(char *cmdline)
         if (!bg) {
             waitfg(pid);
         } else {
-	        printf("[%d] (%d) %s\n", jid, pid, cmdline);
+	        printf("[%d] (%d) %s", jid, pid, cmdline);
         }
     }
     return;
@@ -396,12 +396,12 @@ void sigchld_handler(int sig)
             sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
-            if(verbose) printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, status);
+            printf("Job [%d] (%d) terminated by signal 2\n", jid, pid);
             sigprocmask(SIG_SETMASK, &prev_all, NULL);
         } else if (WIFSTOPPED(status)) {
             struct job_t* job = getjobpid(jobs, pid);
             job->state = ST;   // 여기도 sigprocmask 해야되려나?
-            if(verbose) printf("Job [%d] (%d) stopped by signal 20\n", jid, pid);
+            printf("Job [%d] (%d) stopped by signal 20\n", jid, pid);
         } else {
             sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
             deletejob(jobs, pid);
