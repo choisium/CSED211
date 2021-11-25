@@ -193,6 +193,7 @@ void eval(char *cmdline)
 
         if ((pid = fork()) == 0) {
             sigprocmask(SIG_SETMASK, &prev_one, NULL);
+            setpgid(0, 0);
             /* Child runs user job */
             if (execve(argv[0], argv, environ) < 0) {
                 printf("%s: Command not found\n", argv[0]);
@@ -327,7 +328,7 @@ void do_bgfg(char **argv)
     }
 
     sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-    if (kill(job->pid, SIGCONT) < 0) {
+    if (kill(-job->pid, SIGCONT) < 0) {
         unix_error("kill: kill SIGINT error");
         exit(1);
     }
@@ -402,11 +403,6 @@ void sigchld_handler(int sig)
             struct job_t* job = getjobpid(jobs, pid);
             job->state = ST;   // 여기도 sigprocmask 해야되려나?
             printf("Job [%d] (%d) stopped by signal 20\n", jid, pid);
-        } else {
-            sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-            deletejob(jobs, pid);
-            if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted default\n", jid, pid);
-            sigprocmask(SIG_SETMASK, &prev_all, NULL);
         }
     }
 
@@ -428,7 +424,7 @@ void sigint_handler(int sig)
     pid_t pid = fgpid(jobs);
     if (pid != 0) {
         sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-        if (kill(pid, SIGINT) < 0) {
+        if (kill(-pid, SIGINT) < 0) {
             unix_error("kill: kill SIGINT error");
             exit(1);
         }
@@ -454,7 +450,7 @@ void sigtstp_handler(int sig) // verbose 순서 확인 필요할듯
     pid_t pid = fgpid(jobs);
     if (pid != 0) {
         sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-        if (kill(pid, SIGTSTP) < 0) {
+        if (kill(-pid, SIGTSTP) < 0) {
             unix_error("kill: kill SIGTSTP error");
             exit(1);
         }
