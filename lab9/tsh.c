@@ -339,7 +339,7 @@ void do_bgfg(char **argv)
         waitfg(job->pid);
     } else {
         job->state = BG;
-        printf("[%d] (%d) %s\n", job->jid, job->pid, job->cmdline);
+        printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
         sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
