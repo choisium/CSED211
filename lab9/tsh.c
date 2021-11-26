@@ -87,6 +87,17 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
+/* Safe system call functions */
+pid_t fork_s(void);
+void setpgid_s(pid_t pid, pid_t pgid);
+void kill_s(pid_t pid, int sig);
+void sigprocmask_s(int how, const sigset_t *restrict set, sigset_t *restrict oldset);
+void sigemptyset_s(sigset_t *set);
+void sigfillset_s(sigset_t *set);
+void sigaddset_s(sigset_t *set, int signum);
+
+
+
 /*
  * main - The shell's main routine 
  */
@@ -167,47 +178,47 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
-    char *argv[MAXARGS];
-    char buf[MAXLINE];
-    int bg;
-    int pid;
-    sigset_t mask_all, mask_one, prev_one;
+    char *argv[MAXARGS];    // Argument list
+    int bg;                 // Is background or not
+    int pid;                // Process id
+    sigset_t mask_all, mask_one, prev_one;  // Signal masks
 
     /* Parse command line */
-    strcpy(buf, cmdline);
-    bg = parseline(buf, argv);
+    bg = parseline(cmdline, argv);
 
     /* Ignore empty line */
     if (argv[0] == NULL)
         return;
 
-    sigfillset(&mask_all);
-    sigemptyset(&mask_one);
-    sigaddset(&mask_one, SIGCHLD);
+    /* Initialize masks to use */
+    sigfillset_s(&mask_all);
+    sigemptyset_s(&mask_one);
+    sigaddset_s(&mask_one, SIGCHLD);
 
+    /* Check if built-in command */
     if (!builtin_cmd(argv)) {
-        int state = bg == 1? BG: FG;
-        int jid;
+        sigprocmask_s(SIG_BLOCK, &mask_one, &prev_one);
 
-        sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
-
-        if ((pid = fork()) == 0) {
-            sigprocmask(SIG_SETMASK, &prev_one, NULL);
-            setpgid(0, 0);
-            /* Child runs user job */
+        /* Fork and execute command line as child process */
+        if ((pid = fork_s()) == 0) {
+            setpgid_s(0, 0);    /* Set child process group id */
+            sigprocmask_s(SIG_SETMASK, &prev_one, NULL);
+            /* Child runs executable file */
             if (execve(argv[0], argv, environ) < 0) {
                 printf("%s: Command not found\n", argv[0]);
                 exit(0);
             }
         }
-        sigprocmask(SIG_BLOCK, &mask_all, NULL);
-        jid = addjob(jobs, pid, state, cmdline);
-        sigprocmask(SIG_SETMASK, &prev_one, NULL);
+        sigprocmask_s(SIG_BLOCK, &mask_all, NULL);
+        addjob(jobs, pid, bg == 1? BG: FG, cmdline);    /* Add job to joblist */
+        sigprocmask_s(SIG_SETMASK, &prev_one, NULL);
 
         if (!bg) {
+            /* Wait for foreground job */
             waitfg(pid);
         } else {
-	        printf("[%d] (%d) %s", jid, pid, cmdline);
+            /* Print background job info */
+	        printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
         }
     }
     return;
@@ -276,7 +287,6 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
-    int is_builtin = 0;
     if (strcmp(argv[0], "quit") == 0) {
         exit(0);
     }
@@ -292,7 +302,7 @@ int builtin_cmd(char **argv)
         listjobs(jobs);
         return 1;
     }
-    return is_builtin;     /* not a builtin command */
+    return 0;     /* Not a builtin command */
 }
 
 /* 
@@ -300,24 +310,23 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
-    int is_fg = strcmp(argv[0], "fg") == 0;
+    /* Check if there is an argument */
     if (argv[1] == NULL) {
-        printf("%s command requires PID or %%jobid argument\n", is_fg? "fg": "bg");
+        printf("%s command requires PID or %%jobid argument\n", argv[0]);
         return;
     }
 
+    /* Get pid or jid from the argument */
+    int is_fg = strcmp(argv[0], "fg") == 0;
     int is_pid = argv[1][0] != '%';
     int id = is_pid? atoi(argv[1]): atoi(&argv[1][1]);
-    if (id == 0) {
-        printf("%s: argument must be a PID or %%jobid\n", is_fg? "fg": "bg");
+    if (id == 0 || (!is_pid && argv[1][0] != '%')) {
+        printf("%s: argument must be a PID or %%jobid\n", argv[0]);
         return;
     }
 
+    /* Get job from pid or jid */
     struct job_t* job = is_pid? getjobpid(jobs, id): getjobjid(jobs, id);
-
-    sigset_t mask_all, prev_all;
-    sigfillset(&mask_all);
-
     if (job == NULL) {
         if (is_pid) {
             printf("(%d): No such process\n", id);
@@ -327,20 +336,17 @@ void do_bgfg(char **argv)
         return;
     }
 
-    sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-    if (kill(-job->pid, SIGCONT) < 0) {
-        unix_error("kill: kill SIGINT error");
-        exit(1);
-    }
+    /* Send SIGCONT signal */
+    kill_s(-job->pid, SIGCONT);
 
     if (is_fg) {
+        /* Update job state and wait for foreground job */
         job->state = FG;
-        sigprocmask(SIG_SETMASK, &prev_all, NULL);
         waitfg(job->pid);
     } else {
+        /* Update job state and print background job info */
         job->state = BG;
         printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
-        sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
     return;
@@ -351,15 +357,10 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    struct job_t* job = NULL;
-
-    int count = 0;
-
-    do {
-        job = getjobpid(jobs, pid);
-        sleep(1);
-        count++;
-    } while (job && job->state == FG && count < 10);
+    /* Check if current foreground job has same pid */
+    while (pid == fgpid(jobs)) {
+        sleep(1);   /* Sleep and recheck while pid is foreground job */
+    }
     if (verbose) printf("waitfg: Process (%d) no longer the fg process\n", pid);
 }
 
@@ -378,31 +379,38 @@ void sigchld_handler(int sig)
 {
     if(verbose) printf("sigchld_handler: entering\n");
 
-    int status = -1;
-    int pid;
+    int pid, status, prev_errno = errno;
     sigset_t mask_all, prev_all;
     sigfillset(&mask_all);
 
+    /* Get pid of terminated or stopped child.
+       WUNTRACED: waitpid report the status of any stopped or terminated child processes.
+       WNOHANG: waitpid returns immediately instead of waiting. */
     if ((pid = waitpid(-1, &status, WUNTRACED | WNOHANG)) > 0) {
         struct job_t* job = getjobpid(jobs, pid);
         int jid = job->jid;
 
+        /* When child exited normally */
         if (WIFEXITED(status)) {
-            sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-            deletejob(jobs, pid);
+            sigprocmask_s(SIG_BLOCK, &mask_all, &prev_all);
+            deletejob(jobs, pid);   /* delete job from the job list */
+            sigprocmask_s(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
-            if(verbose) printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", jid, pid, status);
-            sigprocmask(SIG_SETMASK, &prev_all, NULL);
-        } else if (WIFSIGNALED(status)) {
-            sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-            deletejob(jobs, pid);
+            if(verbose) printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", jid, pid, WEXITSTATUS(status));
+        }
+        /* When child is terminated by SIGINT */
+        else if (WIFSIGNALED(status)) {
+            sigprocmask_s(SIG_BLOCK, &mask_all, &prev_all);
+            deletejob(jobs, pid);   /* delete job from the job list */
+            sigprocmask_s(SIG_SETMASK, &prev_all, NULL);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
-            printf("Job [%d] (%d) terminated by signal 2\n", jid, pid);
-            sigprocmask(SIG_SETMASK, &prev_all, NULL);
-        } else if (WIFSTOPPED(status)) {
+            printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, WTERMSIG(status));
+        }
+        /* When child is stopped by SIGTSTP */
+        else if (WIFSTOPPED(status)) {
             struct job_t* job = getjobpid(jobs, pid);
             job->state = ST;   // 여기도 sigprocmask 해야되려나?
-            printf("Job [%d] (%d) stopped by signal 20\n", jid, pid);
+            printf("Job [%d] (%d) stopped by signal %d\n", jid, pid, WSTOPSIG(status));
         }
     }
 
@@ -418,18 +426,11 @@ void sigint_handler(int sig)
 {
     if(verbose) printf("sigint_handler: entering\n");
 
-    sigset_t mask_all, prev_all;
-    sigfillset(&mask_all);
-
     pid_t pid = fgpid(jobs);
     if (pid != 0) {
-        sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-        if (kill(-pid, SIGINT) < 0) {
-            unix_error("kill: kill SIGINT error");
-            exit(1);
-        }
+        /* Send SIGINT to all foreground process group */
+        kill_s(-pid, SIGINT);
         if(verbose) printf("sigint_handler: Job (%d) killed\n", pid);
-        sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
     if(verbose) printf("sigint_handler: exiting\n");
@@ -444,18 +445,11 @@ void sigtstp_handler(int sig) // verbose 순서 확인 필요할듯
 {
     if(verbose) printf("sigtstp_handler: entering\n");
 
-    sigset_t mask_all, prev_all;
-    sigfillset(&mask_all);
-
     pid_t pid = fgpid(jobs);
     if (pid != 0) {
-        sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-        if (kill(-pid, SIGTSTP) < 0) {
-            unix_error("kill: kill SIGTSTP error");
-            exit(1);
-        }
+        /* Send SIGTSTP to all foreground process group */
+        kill_s(-pid, SIGTSTP);
         if(verbose) printf("sigtstp_handler: Job [%d] (%d) stopped\n", pid2jid(pid), pid);
-        sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
 
     if(verbose) printf("sigtstp_handler: exiting\n");
@@ -679,6 +673,59 @@ void sigquit_handler(int sig)
     printf("Terminating after receipt of SIGQUIT signal\n");
     exit(1);
 }
+/***************************
+ * end other helper routines
+ ***************************/
 
 
+/***************************
+ * Safe system call routines
+ ***************************/
 
+/*
+ * usage - print a help message
+ */
+
+pid_t fork_s(void)
+{
+    pid_t pid;
+    if ((pid = fork()) < 0)
+        unix_error("fork error");
+    return pid;
+}
+
+void setpgid_s(pid_t pid, pid_t pgid)
+{
+    if (setpgid(pid, pgid) < 0)
+        unix_error("setpgid error");
+}
+
+void kill_s(pid_t pid, int sig)
+{
+    if (kill(pid, sig) < 0)
+        unix_error("kill error");
+}
+
+void sigprocmask_s(int how, const sigset_t *restrict set, sigset_t *restrict oldset)
+{
+    if (sigprocmask(how, set, oldset) < 0)
+        unix_error("sigprocmask error");
+}
+
+void sigemptyset_s(sigset_t *set)
+{
+    if (sigemptyset(set) < 0)
+        unix_error("sigemptyset error");
+}
+
+void sigfillset_s(sigset_t *set)
+{
+    if (sigfillset(set) < 0)
+        unix_error("sigfillset error");
+}
+
+void sigaddset_s(sigset_t *set, int signum)
+{
+    if (sigaddset(set, signum) < 0)
+        unix_error("sigaddset error");
+}
