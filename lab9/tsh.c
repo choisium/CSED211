@@ -379,7 +379,7 @@ void sigchld_handler(int sig)
 {
     if(verbose) printf("sigchld_handler: entering\n");
 
-    int pid, status, prev_errno = errno;
+    int pid, status;
     sigset_t mask_all, prev_all;
     sigfillset(&mask_all);
 
