@@ -91,7 +91,7 @@ handler_t *Signal(int signum, handler_t *handler);
 pid_t fork_s(void);
 void setpgid_s(pid_t pid, pid_t pgid);
 void kill_s(pid_t pid, int sig);
-void sigprocmask_s(int how, const sigset_t *restrict set, sigset_t *restrict oldset);
+void sigprocmask_s(int how, const sigset_t *set, sigset_t *oldset);
 void sigemptyset_s(sigset_t *set);
 void sigfillset_s(sigset_t *set);
 void sigaddset_s(sigset_t *set, int signum);
@@ -706,7 +706,7 @@ void kill_s(pid_t pid, int sig)
         unix_error("kill error");
 }
 
-void sigprocmask_s(int how, const sigset_t *restrict set, sigset_t *restrict oldset)
+void sigprocmask_s(int how, const sigset_t * set, sigset_t * oldset)
 {
     if (sigprocmask(how, set, oldset) < 0)
         unix_error("sigprocmask error");
