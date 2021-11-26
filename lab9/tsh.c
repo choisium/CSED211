@@ -329,9 +329,9 @@ void do_bgfg(char **argv)
     struct job_t* job = is_pid? getjobpid(jobs, id): getjobjid(jobs, id);
     if (job == NULL) {
         if (is_pid) {
-            printf("(%d): No such process\n", id);
+            printf("(%s): No such process\n", argv[1]);
         } else {
-            printf("%%%d: No such job\n", id);
+            printf("%s: No such job\n", argv[1]);
         }
         return;
     }
