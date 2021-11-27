@@ -197,6 +197,7 @@ void eval(char *cmdline)
 
     /* Check if built-in command */
     if (!builtin_cmd(argv)) {
+        /* Block SIGCHLD signal */
         sigprocmask_s(SIG_BLOCK, &mask_one, &prev_one);
 
         /* Fork and execute command line as child process */
@@ -206,12 +207,12 @@ void eval(char *cmdline)
             /* Child runs executable file */
             if (execve(argv[0], argv, environ) < 0) {
                 printf("%s: Command not found\n", argv[0]);
-                exit(0);
+                exit(1);
             }
         }
         sigprocmask_s(SIG_BLOCK, &mask_all, NULL);
         addjob(jobs, pid, bg == 1? BG: FG, cmdline);    /* Add job to joblist */
-        sigprocmask_s(SIG_SETMASK, &prev_one, NULL);
+        sigprocmask_s(SIG_SETMASK, &prev_one, NULL);    /* Unblock signals */
 
         if (!bg) {
             /* Wait for foreground job */
@@ -389,8 +390,15 @@ void sigchld_handler(int sig)
     if(verbose) printf("sigchld_handler: entering\n");
 
     int pid, status;
-    sigset_t mask_all, prev_all;
-    sigfillset(&mask_all);
+    sigset_t mask_all, mask_one, prev_one;
+
+    /* Initialize masks to use */
+    sigfillset_s(&mask_all);
+    sigemptyset_s(&mask_one);
+    sigaddset_s(&mask_one, SIGCHLD);
+
+    /* Block SIGCHLD signal */
+    sigprocmask_s(SIG_BLOCK, &mask_one, &prev_one);
 
     /* Get pid of terminated or stopped child.
        WUNTRACED: waitpid report the status of any stopped or terminated child processes.
@@ -401,27 +409,28 @@ void sigchld_handler(int sig)
 
         /* When child exited normally */
         if (WIFEXITED(status)) {
-            sigprocmask_s(SIG_BLOCK, &mask_all, &prev_all);
-            deletejob(jobs, pid);   /* delete job from the job list */
-            sigprocmask_s(SIG_SETMASK, &prev_all, NULL);
+            sigprocmask_s(SIG_BLOCK, &mask_all, NULL);
+            deletejob(jobs, pid);   /* Delete job from the job list */
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
             if(verbose) printf("sigchld_handler: Job [%d] (%d) terminates OK (status %d)\n", jid, pid, WEXITSTATUS(status));
         }
         /* When child is terminated by SIGINT */
         else if (WIFSIGNALED(status)) {
-            sigprocmask_s(SIG_BLOCK, &mask_all, &prev_all);
-            deletejob(jobs, pid);   /* delete job from the job list */
-            sigprocmask_s(SIG_SETMASK, &prev_all, NULL);
+            sigprocmask_s(SIG_BLOCK, &mask_all, NULL);
+            deletejob(jobs, pid);   /* Delete job from the job list */
             if(verbose) printf("sigchld_handler: Job [%d] (%d) deleted\n", jid, pid);
             printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, WTERMSIG(status));
         }
         /* When child is stopped by SIGTSTP */
         else if (WIFSTOPPED(status)) {
             struct job_t* job = getjobpid(jobs, pid);
-            job->state = ST;   // 여기도 sigprocmask 해야되려나?
+            job->state = ST;        /* Update job state to ST */
             printf("Job [%d] (%d) stopped by signal %d\n", jid, pid, WSTOPSIG(status));
         }
     }
+
+    /* Unblock signals */
+    sigprocmask_s(SIG_SETMASK, &prev_one, NULL);
 
     if(verbose) printf("sigchld_handler: exiting\n");
 }
