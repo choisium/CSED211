@@ -22,7 +22,8 @@
 /* Basic constants and macros */
 #define WSIZE           4           /* Word and header/footer size (bytes) */
 #define DSIZE           8           /* Double word size (bytes) */
-#define MINBLOCKSIZE    (2 * DSIZE) /* Minimum block size (bytes) */
+#define OVERHEAD        8           /* Overhead for allocated block (bytes) */
+#define MINBLOCKSIZE    8           /* Minimum block size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
@@ -95,11 +96,9 @@ void *mm_malloc(size_t size)
         return NULL;
 
     /* Adjust block size to include overhead and alignment reqs. */
-    if (size <= DSIZE)
-        asize = 2*DSIZE;
-    else
-        asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
-        // asize = ALIGN(size + DSIZE);
+    asize = ALIGN(size + OVERHEAD);
+    if (asize <= MINBLOCKSIZE)
+        asize = MINBLOCKSIZE;
 
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
@@ -244,7 +243,7 @@ static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
 
-    if ((csize - asize) >= 2*DSIZE) {
+    if ((csize - asize) >= MINBLOCKSIZE) {
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         bp = NEXT_BLKP(bp);
