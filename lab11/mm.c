@@ -8,6 +8,11 @@
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
+ * [Allocated Block]
+ * 
+ *
+ * Prev pointer를 최대한 없애보려고 했는데, free list에서 remove를 할 때
+ * prev 없으면 prev의 next pointer를 업데이트하기 어려울 듯
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +28,7 @@
 #define WSIZE           4           /* Word and header/footer size (bytes) */
 #define DSIZE           8           /* Double word size (bytes) */
 #define OVERHEAD        8           /* Overhead for allocated block (bytes) */
-#define MINBLOCKSIZE    8           /* Minimum block size (bytes) */
+#define MINBLOCKSIZE    24          /* Minimum block size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
@@ -50,14 +55,24 @@
 #define NEXT_BLKP(bp)   ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+
+#define SUCC(bp)        ((char *)(bp))
+#define PRED(bp)        ((char *)(bp) + DSIZE)
+#define SUCC_P(bp)      (*(char **)SUCC(bp))
+#define PRED_P(bp)      (*(char **)PRED(bp))
+
 /* Pointer to initial heap space */
 static char *heap_listp;
+static char *free_listp;
 
 /* Static helper functions */
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
+static void insert_block(void* bp);
+static void delete_block(void* bp);
+
 
 /* 
  * mm_init - initialize the malloc package.
@@ -74,6 +89,8 @@ int mm_init(void)
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));  /* Prologue footer */
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));      /* Epilogue header */
     heap_listp += (2*WSIZE);
+
+    free_listp = NULL;
 
     /* Extend the empty heap with a free block of CHUNKSIZE BYTES */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
@@ -191,41 +208,49 @@ static void *coalesce(void *bp)
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {         /* Case 1 */
-        return bp;
+        insert_block(bp);
     }
 
     else if (prev_alloc && !next_alloc) {   /* Case 2 */
+        delete_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        insert_block(bp);
     }
 
     else if (!prev_alloc && next_alloc) {   /* Case 3 */
+        delete_block(PREV_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
+        insert_block(bp);
     }
 
     else {                                  /* Case 4 */
+        delete_block(NEXT_BLKP(bp));
+        delete_block(PREV_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
                 GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
+        insert_block(bp);
     }
+
     return bp;
 }
 
 /*
- * find_fit - first-fit search of the implicit free list
+ * find_fit - first-fit search of the explicit free list
  */
 static void *find_fit(size_t asize)
 {
     /* First-fit search */
     void *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+    for (bp = free_listp; bp != NULL; bp = SUCC_P(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
             return bp;
         }
@@ -244,14 +269,50 @@ static void place(void *bp, size_t asize)
     size_t csize = GET_SIZE(HDRP(bp));
 
     if ((csize - asize) >= MINBLOCKSIZE) {
+        delete_block(bp);
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
+
+        /* Split */
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK((csize-asize), 0));
         PUT(FTRP(bp), PACK((csize-asize), 0));
+        insert_block(bp);
     }
     else {
+        delete_block(bp);
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
+    }
+}
+
+static void insert_block(void* bp) {
+    /* Update next pointer */
+    if (free_listp == NULL)
+    {
+        free_listp = bp;
+        PUT(SUCC(bp), NULL);
+        PUT(PRED(bp), NULL);
+    }
+    else
+    {
+        /* Update pointer in bp */
+        PUT(SUCC(bp), free_listp);
+        PUT(PRED(bp), NULL);
+        /* Update pointer next to bp */
+        PUT(PRED(free_listp), bp);
+        free_listp = bp;
+    }
+}
+
+static void delete_block(void* bp) {
+    if (SUCC_P(bp) != NULL) {   /* bp is not tail */
+        PUT(PRED(SUCC_P(bp)), PRED_P(bp));
+    }
+
+    if (PRED_P(bp) != NULL) {   /* bp is not head */
+        PUT(SUCC(PRED_P(bp)), SUCC_P(bp));
+    } else {                    /* bp is head */
+        free_listp = SUCC_P(bp);
     }
 }
