@@ -30,8 +30,10 @@
 #define OVERHEAD        8           /* Overhead for allocated block (bytes) */
 #define MINBLOCKSIZE    24          /* Minimum block size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
+#define SIZECLASSNUM    20          /* The number of size class in segregated list */
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
+#define MIN(x, y)       ((x) < (y)? (x): (y))
 
 /* Pack a size and allocated bit into a word */
 #define PACK(size, alloc)   ((size) | (alloc))
@@ -55,15 +57,19 @@
 #define NEXT_BLKP(bp)   ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
-
+/* Given block ptr bp, compute address of its succ and pred pointer */
 #define SUCC(bp)        ((char *)(bp))
 #define PRED(bp)        ((char *)(bp) + DSIZE)
-#define SUCC_P(bp)      (*(char **)SUCC(bp))
-#define PRED_P(bp)      (*(char **)PRED(bp))
+
+/* Given block ptr bp, compute address of its successor and predecessor block */
+#define SUCC_BLKP(bp)   (*(char **)SUCC(bp))
+#define PRED_BLKP(bp)   (*(char **)PRED(bp))
+
 
 /* Pointer to initial heap space */
 static char *heap_listp;
 static char *free_listp;
+static char *seg_list[SIZECLASSNUM];
 
 /* Static helper functions */
 static void *extend_heap(size_t words);
@@ -72,6 +78,7 @@ static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 static void insert_block(void* bp);
 static void delete_block(void* bp);
+static int get_seg_index(size_t words);
 
 
 /* 
@@ -91,6 +98,11 @@ int mm_init(void)
     heap_listp += (2*WSIZE);
 
     free_listp = NULL;
+
+    int i;
+    for (i = 0; i < SIZECLASSNUM; i++) {
+        seg_list[i] = NULL;
+    }
 
     /* Extend the empty heap with a free block of CHUNKSIZE BYTES */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
@@ -249,10 +261,13 @@ static void *find_fit(size_t asize)
 {
     /* First-fit search */
     void *bp;
+    int seg_index = get_seg_index(asize/WSIZE);
 
-    for (bp = free_listp; bp != NULL; bp = SUCC_P(bp)) {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
-            return bp;
+    for (; seg_index < SIZECLASSNUM; seg_index++) {
+        for (bp = seg_list[seg_index]; bp != NULL; bp = SUCC_BLKP(bp)) {
+            if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+                return bp;
+            }
         }
     }
 
@@ -287,32 +302,48 @@ static void place(void *bp, size_t asize)
 }
 
 static void insert_block(void* bp) {
+    int seg_index = get_seg_index(GET_SIZE(HDRP(bp))/WSIZE);
+
     /* Update next pointer */
-    if (free_listp == NULL)
+    if (seg_list[seg_index] == NULL)
     {
-        free_listp = bp;
+        seg_list[seg_index] = bp;
         PUT(SUCC(bp), NULL);
         PUT(PRED(bp), NULL);
     }
     else
     {
         /* Update pointer in bp */
-        PUT(SUCC(bp), free_listp);
+        PUT(SUCC(bp), seg_list[seg_index]);
         PUT(PRED(bp), NULL);
         /* Update pointer next to bp */
-        PUT(PRED(free_listp), bp);
-        free_listp = bp;
+        PUT(PRED(seg_list[seg_index]), bp);
+        seg_list[seg_index] = bp;
     }
 }
 
 static void delete_block(void* bp) {
-    if (SUCC_P(bp) != NULL) {   /* bp is not tail */
-        PUT(PRED(SUCC_P(bp)), PRED_P(bp));
+    int seg_index = get_seg_index(GET_SIZE(HDRP(bp))/WSIZE);
+
+    if (SUCC_BLKP(bp) != NULL) {   /* bp is not tail */
+        PUT(PRED(SUCC_BLKP(bp)), PRED_BLKP(bp));
     }
 
-    if (PRED_P(bp) != NULL) {   /* bp is not head */
-        PUT(SUCC(PRED_P(bp)), SUCC_P(bp));
+    if (PRED_BLKP(bp) != NULL) {   /* bp is not head */
+        PUT(SUCC(PRED_BLKP(bp)), SUCC_BLKP(bp));
     } else {                    /* bp is head */
-        free_listp = SUCC_P(bp);
+        seg_list[seg_index] = SUCC_BLKP(bp);
     }
+}
+
+static int get_seg_index(size_t words) {
+    int i;
+    int class_size = 1;
+    for (i = 0; i < SIZECLASSNUM; i++) {
+        class_size <<= 1;
+        if (words < class_size) {
+            break;
+        }
+    }
+    return MIN(i, SIZECLASSNUM - 1);
 }
