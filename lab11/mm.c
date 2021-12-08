@@ -31,7 +31,6 @@
 #define MINBLOCKSIZE    24          /* Minimum block size (bytes) */
 #define INITHEAPSIZE    (1 << 6)    /* Initial heap size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
-#define REALLOCSIZE     (1 << 15)    /* Initial realloc size (bytes) - to optimize realloc traces */
 #define SIZECLASSNUM    20          /* The number of size class in segregated list */
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
@@ -174,13 +173,12 @@ void *mm_realloc(void *ptr, size_t size)
         return NULL;
     }
     if (ptr == NULL) {
-        asize = ALIGN(MAX(size, REALLOCSIZE));
-        return mm_malloc(asize);
+        return mm_malloc(size);
     }
 
     /* Compare old block size and requested size */
     oldSize = GET_SIZE(HDRP(ptr));
-    asize = ALIGN(MAX(size, REALLOCSIZE));
+    asize = ALIGN(size + OVERHEAD);
     if (asize <= oldSize)
         /* When requested size is adaptable, just return the pointer */
         return ptr;
@@ -189,7 +187,7 @@ void *mm_realloc(void *ptr, size_t size)
          * When requested size is not feasible, allocate twice of them
          * to optimize performance for realloc traces
          */
-        asize *= 2;
+        asize *= 1.5;
     
     /* Allocate block for requested size */
     newbp = mm_malloc(asize);
