@@ -29,7 +29,9 @@
 #define DSIZE           8           /* Double word size (bytes) */
 #define OVERHEAD        8           /* Overhead for allocated block (bytes) */
 #define MINBLOCKSIZE    24          /* Minimum block size (bytes) */
+#define INITHEAPSIZE    (1 << 6)    /* Initial heap size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
+#define REALLOCSIZE     (1 << 15)    /* Initial realloc size (bytes) - to optimize realloc traces */
 #define SIZECLASSNUM    20          /* The number of size class in segregated list */
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
@@ -105,7 +107,7 @@ int mm_init(void)
     }
 
     /* Extend the empty heap with a free block of CHUNKSIZE BYTES */
-    if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
+    if (extend_heap(INITHEAPSIZE/WSIZE) == NULL)
         return -1;
     return 0;
 }
@@ -162,7 +164,9 @@ void *mm_realloc(void *ptr, size_t size)
 {
     void *oldbp = ptr;  /* Old block pointer */
     void *newbp;        /* New block pointer */
-    size_t copysize;       /* Adjusted block size */
+    size_t oldSize;     /* Old block size */
+    size_t asize;       /* Adjusted block size */
+    size_t copysize;    /* Adjusted block size */
 
     /* Handle extreme case */
     if (size == 0) {
@@ -170,11 +174,25 @@ void *mm_realloc(void *ptr, size_t size)
         return NULL;
     }
     if (ptr == NULL) {
-        return mm_malloc(size);
+        asize = ALIGN(MAX(size, REALLOCSIZE));
+        return mm_malloc(asize);
     }
+
+    /* Compare old block size and requested size */
+    oldSize = GET_SIZE(HDRP(ptr));
+    asize = ALIGN(MAX(size, REALLOCSIZE));
+    if (asize <= oldSize)
+        /* When requested size is adaptable, just return the pointer */
+        return ptr;
+    else
+        /*
+         * When requested size is not feasible, allocate twice of them
+         * to optimize performance for realloc traces
+         */
+        asize *= 2;
     
     /* Allocate block for requested size */
-    newbp = mm_malloc(size);
+    newbp = mm_malloc(asize);
     if (newbp == NULL)
         return NULL;
 
@@ -338,7 +356,7 @@ static void delete_block(void* bp) {
 
 static int get_seg_index(size_t words) {
     int i;
-    int class_size = 1;
+    int class_size = 2;
     for (i = 0; i < SIZECLASSNUM; i++) {
         class_size <<= 1;
         if (words < class_size) {
