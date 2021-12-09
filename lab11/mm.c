@@ -32,6 +32,7 @@
 #define INITHEAPSIZE    (1 << 6)    /* Initial heap size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
 #define SIZECLASSNUM    20          /* The number of size class in segregated list */
+#define REALLOC_BUFFER  256
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
 #define MIN(x, y)       ((x) < (y)? (x): (y))
@@ -69,8 +70,8 @@
 
 /* Pointer to initial heap space */
 static char *heap_listp;
-static char *free_listp;
 static char *seg_list[SIZECLASSNUM];
+static int realloc_flag = 0;
 
 /* Static helper functions */
 static void *extend_heap(size_t words);
@@ -97,8 +98,6 @@ int mm_init(void)
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));  /* Prologue footer */
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));      /* Epilogue header */
     heap_listp += (2*WSIZE);
-
-    free_listp = NULL;
 
     int i;
     for (i = 0; i < SIZECLASSNUM; i++) {
@@ -179,18 +178,22 @@ void *mm_realloc(void *ptr, size_t size)
     /* Compare old block size and requested size */
     oldSize = GET_SIZE(HDRP(ptr));
     asize = ALIGN(size + OVERHEAD);
-    if (asize <= oldSize)
-        /* When requested size is adaptable, just return the pointer */
-        return ptr;
+    if (asize <= oldSize) {
+        if (asize + REALLOC_BUFFER <= oldSize || GET_ALLOC(FTRP(PREV_BLKP(ptr))))
+            /* When requested size is adaptable, just return the pointer */
+            return ptr;
+    }
     else
         /*
          * When requested size is not feasible, allocate twice of them
          * to optimize performance for realloc traces
          */
-        asize *= 1.5;
+        asize *= 2;
     
     /* Allocate block for requested size */
+    realloc_flag = 1;
     newbp = mm_malloc(asize);
+    realloc_flag = 0;
     if (newbp == NULL)
         return NULL;
 
@@ -299,7 +302,7 @@ static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
 
-    if ((csize - asize) >= MINBLOCKSIZE) {
+    if (!realloc_flag && (csize - asize) >= MINBLOCKSIZE) {
         delete_block(bp);
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
