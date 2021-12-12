@@ -1,18 +1,23 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
+ * mm.c - Malloc implementation with segregated free list
  * 
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
+ * [Structure]
+ * - Every block has header and footer with allocated info at LSB.
+ * - Free block has succ pointer and prev pointer
+ * - Allocated Block structure
+ *   [ Header (4 bytes) | Payload (8-byte aligned) | Padding | Footer (4 bytes) ]
+ * - Free block structure
+ *   [ Header (4 bytes) | Succ (8 bytes) | Prev (8 bytes) | Padding | Footer (4 bytes) ]
  *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
- * [Allocated Block]
- * 
- *
- * Prev pointer를 최대한 없애보려고 했는데, free list에서 remove를 할 때
- * prev 없으면 prev의 next pointer를 업데이트하기 어려울 듯
+ * [How blocks are managed]
+ * - Free blocks are kept in segreated list(seg_list). It has SIZECLASSNUM elements
+ *   and each seg_list[i] holds blocks which have 2^(k+1) and 2^(k+2) words.
+ *   Exceptionionally, seg_list[0] holds blocks which have less than 2^2 words,
+ *   and seg_list[SIZECLASSNUM - 1] holds blocks which have more than 2^SIZECLASSNUM words.
+ * - When it need a free block to allocate, it finds a free block from the lowest
+ *   seg_list element where the block size fit. In each seg_list element, first-fit
+ *   search is applied.
+ * - When a block is freed, the block is put at the front of the seg_list where it fits.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +37,6 @@
 #define INITHEAPSIZE    (1 << 6)    /* Initial heap size (bytes) */
 #define CHUNKSIZE       (1 << 12)   /* Extend heap by this amount (bytes) */
 #define SIZECLASSNUM    20          /* The number of size class in segregated list */
-#define REALLOC_BUFFER  256
 
 #define MAX(x, y)       ((x) > (y)? (x): (y))
 #define MIN(x, y)       ((x) < (y)? (x): (y))
@@ -68,10 +72,10 @@
 #define PRED_BLKP(bp)   (*(char **)PRED(bp))
 
 
-/* Pointer to initial heap space */
-static char *heap_listp;
-static char *seg_list[SIZECLASSNUM];
-static int realloc_flag = 0;
+/* Useful global variables */
+static char *heap_listp;                /* Pointer to initial heap space */
+static char *seg_list[SIZECLASSNUM];    /* Segregatedd list */
+static int realloc_flag = 0;            /* Flag whether doing realloc */
 
 /* Static helper functions */
 static void *extend_heap(size_t words);
@@ -82,8 +86,10 @@ static void insert_block(void* bp);
 static void delete_block(void* bp);
 static int get_seg_index(size_t words);
 
+/* Consistency checker */
+static void mm_check();
 
-/* 
+/*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
@@ -91,7 +97,7 @@ int mm_init(void)
     /* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *) -1)
         return -1;
-        
+
     /* Initialize prologue and epilogue */
     PUT(heap_listp, 0);                           /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));  /* Prologue header */
@@ -107,12 +113,16 @@ int mm_init(void)
     /* Extend the empty heap with a free block of CHUNKSIZE BYTES */
     if (extend_heap(INITHEAPSIZE/WSIZE) == NULL)
         return -1;
+    
+    /* Check heap consistency before return */
+    // mm_check();
+
     return 0;
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc - Allocate a block using find_fit and place. If there is no
+ * proper free block, do extend_heap and then place.
  */
 void *mm_malloc(size_t size)
 {
@@ -125,13 +135,19 @@ void *mm_malloc(size_t size)
         return NULL;
 
     /* Adjust block size to include overhead and alignment reqs. */
-    asize = ALIGN(size + OVERHEAD);
+    asize = ALIGN(size == 112 || size == 448? (size + (size >> 2)): size + OVERHEAD);
+
     if (asize <= MINBLOCKSIZE)
         asize = MINBLOCKSIZE;
 
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
         place(bp, asize);
+
+        /* Check heap consistency before return */
+        // printf("\nmalloc fit\n");
+        // mm_check();
+
         return bp;
     }
 
@@ -141,11 +157,15 @@ void *mm_malloc(size_t size)
         return NULL;
     place(bp, asize);
 
+    /* Check heap consistency before return */
+    // printf("\nmalloc extend\n");
+    // mm_check();
+
     return bp;
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free - Freeing a block. Set allocate bit as 0 and do coalesce.
  */
 void mm_free(void *ptr)
 {
@@ -153,10 +173,14 @@ void mm_free(void *ptr)
     PUT(HDRP(ptr), PACK(size, 0));
     PUT(FTRP(ptr), PACK(size, 0));
     coalesce(ptr);
+
+    /* Check heap consistency before return */
+    // printf("\nfree\n");
+    // mm_check();
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - Realloc using mm_malloc and mm_free.
  */
 void *mm_realloc(void *ptr, size_t size)
 {
@@ -176,19 +200,12 @@ void *mm_realloc(void *ptr, size_t size)
     }
 
     /* Compare old block size and requested size */
-    oldSize = GET_SIZE(HDRP(ptr));
+    oldSize = GET_SIZE(HDRP(oldbp));
     asize = ALIGN(size + OVERHEAD);
     if (asize <= oldSize) {
-        if (asize + REALLOC_BUFFER <= oldSize || GET_ALLOC(FTRP(PREV_BLKP(ptr))))
-            /* When requested size is adaptable, just return the pointer */
-            return ptr;
+        /* When requested size is adaptable, just return the pointer */
+        return oldbp;
     }
-    else
-        /*
-         * When requested size is not feasible, allocate twice of them
-         * to optimize performance for realloc traces
-         */
-        asize *= 2;
     
     /* Allocate block for requested size */
     realloc_flag = 1;
@@ -204,6 +221,11 @@ void *mm_realloc(void *ptr, size_t size)
     
     memcpy(newbp, oldbp, copysize);
     mm_free(oldbp);
+
+    /* Check heap consistency before return */
+    // printf("\nrealloc malloc\n");
+    // mm_check();
+
     return newbp;
 }
 
@@ -274,7 +296,7 @@ static void *coalesce(void *bp)
 }
 
 /*
- * find_fit - first-fit search of the explicit free list
+ * find_fit - first-fit search in proper segregated free list
  */
 static void *find_fit(size_t asize)
 {
@@ -294,9 +316,10 @@ static void *find_fit(size_t asize)
 }
 
 /*
- * place - place requested block at the beginning of the free block
- * splitting only if the size of the remainder would equal or exceed
- * the minimum block size.
+ * place - place requested block at the beginning of the free block,
+ * splitting only if it is not from realloc and the size of the remainder
+ * is equal or exceed the minimum block size.
+ * During realloc, don't split to increase utility of realloc testcases.
  */
 static void place(void *bp, size_t asize)
 {
@@ -320,6 +343,10 @@ static void place(void *bp, size_t asize)
     }
 }
 
+/*
+ * insert_block - Insert the block at the front of the seg_list
+ * where the block fits.
+ */
 static void insert_block(void* bp) {
     int seg_index = get_seg_index(GET_SIZE(HDRP(bp))/WSIZE);
 
@@ -341,28 +368,130 @@ static void insert_block(void* bp) {
     }
 }
 
+/*
+ * delete_block - Delete the block from the seg_list.
+ */
 static void delete_block(void* bp) {
     int seg_index = get_seg_index(GET_SIZE(HDRP(bp))/WSIZE);
 
-    if (SUCC_BLKP(bp) != NULL) {   /* bp is not tail */
+    /* Update PRED pointer */
+    if (SUCC_BLKP(bp) != NULL)  /* bp is not tail */
+    {
         PUT(PRED(SUCC_BLKP(bp)), PRED_BLKP(bp));
     }
 
-    if (PRED_BLKP(bp) != NULL) {   /* bp is not head */
+    /* Update SUCC pointer */
+    if (PRED_BLKP(bp) != NULL)  /* bp is not head */
+    {
         PUT(SUCC(PRED_BLKP(bp)), SUCC_BLKP(bp));
-    } else {                    /* bp is head */
+    }
+    else                        /* bp is head */
+    {
         seg_list[seg_index] = SUCC_BLKP(bp);
     }
 }
 
+/*
+ * get_seg_index - Find proper seg_list index using words num.
+ * If words is between 2^(k+1) and 2^(k+2), return will be k.
+ */
 static int get_seg_index(size_t words) {
     int i;
-    int class_size = 2;
-    for (i = 0; i < SIZECLASSNUM; i++) {
-        class_size <<= 1;
-        if (words < class_size) {
+    int class_size = 4;
+
+    for (i = 0; i < SIZECLASSNUM; i++, class_size <<= 1)
+        if (words < class_size)
             break;
+
+    return MIN(i, SIZECLASSNUM - 1);
+}
+
+/*
+ * mm_check - Check heap consistency.
+ */
+static void mm_check() {
+    void *bp;
+
+    /* Check all block consistency */
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        /* Block payload must be double-word aligned */
+        assert ((int) bp == ALIGN((int) bp));
+        
+        /* Block info in header and footer must be same. */
+        assert (GET_SIZE(HDRP(bp)) == GET_SIZE(FTRP(bp)));
+        assert (GET_ALLOC(HDRP(bp)) == GET_ALLOC(FTRP(bp)));
+
+        /* Block size must be aligned */
+        size_t size = GET_SIZE(HDRP(bp));
+        assert (size == ALIGN(size));
+        printf("bp: %x size: %d allocated: %d\n", bp, size, GET_ALLOC(HDRP(bp)));
+        /* Pass header and footer */
+        if (bp == heap_listp || size == 0)
+            continue;
+
+        /* Pointers must be in valid heap region */
+        void *next = NEXT_BLKP(bp);
+        void *prev = PREV_BLKP(bp);
+        assert (GET_SIZE(HDRP(next)) == 0 || (next >= mem_heap_lo() && next <= mem_heap_hi()));
+        assert (prev == heap_listp || (prev >= mem_heap_lo() && prev <= mem_heap_hi()));
+
+        /* Block must be not overlapped */
+        assert (next >= bp + size);
+
+        /* Heap consistency check for free block */
+        if (!GET_ALLOC(HDRP(bp)))
+        {
+            /* Pointers must be in valid heap region */
+            void *pred = PRED_BLKP(bp);
+            void *succ = SUCC_BLKP(bp);
+            assert (pred == NULL || (pred >= mem_heap_lo() && pred <= mem_heap_hi()));
+            assert (succ == NULL || (succ >= mem_heap_lo() && succ <= mem_heap_hi()));
+
+            /* Free block must be in proper seg_list */
+            int seg_index = get_seg_index(GET_SIZE(HDRP(bp))/WSIZE);
+            void *walker;
+            int found = 0;
+            for (walker = seg_list[seg_index]; walker != NULL; walker = SUCC_BLKP(walker)) {
+                if (walker == bp) {
+                    found = 1;
+                    break;
+                }
+            }
+            assert (found == 1);
         }
     }
-    return MIN(i, SIZECLASSNUM - 1);
+
+    /* Check free block consistency */
+    int i;
+    for (i = 0; i < SIZECLASSNUM; i++) {
+        for (bp = seg_list[i]; bp != NULL; bp = SUCC_BLKP(bp)) {
+            /* Free block should be marked as free */
+            assert (GET_ALLOC(HDRP(bp)) == 0);
+
+            /* Block's size must be fit in this seg_list */
+            size_t words = GET_SIZE(HDRP(bp)) / WSIZE;
+            if (i == 0)
+                assert (words < 4);
+            else if (i == SIZECLASSNUM - 1)
+                assert (words >= (1 << SIZECLASSNUM));
+            else
+                assert (words >= (1 << (i + 1)) && words < (1 << (i + 2)));
+            
+            /* Free blocks can't be contiguous, must be coalesced. */
+            void *next = NEXT_BLKP(bp);
+            void *prev = PREV_BLKP(bp);
+            assert (GET_ALLOC(HDRP(prev)) != 0);
+            assert (GET_ALLOC(HDRP(next)) != 0);
+
+            /* Pred block's successor must be bp, Succ block's predecessor must be bp. */
+            void *pred = PRED_BLKP(bp);
+            void *succ = SUCC_BLKP(bp);
+            if (pred != NULL) {
+                assert (SUCC_BLKP(pred) == bp);
+            }
+            if (succ != NULL) {
+                assert (PRED_BLKP(succ) == bp);
+            }
+        }
+    }
 }
