@@ -443,14 +443,9 @@ static void mm_check() {
         if (bp == heap_listp || size == 0)
             continue;
 
-        /* Pointers must be in valid heap region */
-        void *next = NEXT_BLKP(bp);
-        void *prev = PREV_BLKP(bp);
-        assert (GET_SIZE(HDRP(next)) == 0 || (next >= mem_heap_lo() && next <= mem_heap_hi()));
-        assert (prev == heap_listp || (prev >= mem_heap_lo() && prev <= mem_heap_hi()));
-
-        /* Block must be not overlapped */
-        assert (next >= bp + size);
+        /* Next block's header must be in valid heap region */
+        void *next = HDRP(NEXT_BLKP(bp));
+        assert (next >= mem_heap_lo() && next <= mem_heap_hi());
 
         /* Heap consistency check for free block */
         if (!GET_ALLOC(HDRP(bp)))
