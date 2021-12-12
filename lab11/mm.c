@@ -180,7 +180,8 @@ void mm_free(void *ptr)
 }
 
 /*
- * mm_realloc - Realloc using mm_malloc and mm_free.
+ * mm_realloc - Realloc using mm_malloc and mm_free. If requested size is
+ * smaller than already allocated size, don't realloc and just return it.
  */
 void *mm_realloc(void *ptr, size_t size)
 {
@@ -192,7 +193,8 @@ void *mm_realloc(void *ptr, size_t size)
 
     /* Handle extreme case */
     if (size == 0) {
-        mm_free(ptr);
+        if (ptr != NULL)
+            mm_free(ptr);
         return NULL;
     }
     if (ptr == NULL) {
