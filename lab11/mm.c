@@ -115,6 +115,7 @@ int mm_init(void)
         return -1;
     
     /* Check heap consistency before return */
+    // printf("\ninit\n");
     // mm_check();
 
     return 0;
@@ -201,17 +202,22 @@ void *mm_realloc(void *ptr, size_t size)
         return mm_malloc(size);
     }
 
-    /* Compare old block size and requested size */
+    /* Compare old block size and requested size.
+     * When requested size is adaptable, just return the pointer
+     */
     oldSize = GET_SIZE(HDRP(oldbp));
     asize = ALIGN(size + OVERHEAD);
     if (asize <= oldSize) {
-        /* When requested size is adaptable, just return the pointer */
+        /* Check heap consistency before return */
+        // printf("\nrealloc fit\n");
+        // mm_check();
+
         return oldbp;
     }
     
     /* Allocate block for requested size */
     realloc_flag = 1;
-    newbp = mm_malloc(asize);
+    newbp = mm_malloc(size);
     realloc_flag = 0;
     if (newbp == NULL)
         return NULL;
@@ -254,7 +260,12 @@ static void *extend_heap(size_t words)
 }
 
 /*
- * coalesce - Join successive free block
+ * coalesce - Join continugous free block.
+ * case 1 - prev and next block is all allocated. Just return bp.
+ * case 2 - next block is free. Merge bp with its next block and return bp.
+ * case 3 - prev block is free. Merge bp with its prev block and return prev.
+ * case 4 - next and prev block is all free. Merge bp with its prev, next blocks
+ * and return prev.
  */
 static void *coalesce(void *bp)
 {
@@ -308,7 +319,7 @@ static void *find_fit(size_t asize)
 
     for (; seg_index < SIZECLASSNUM; seg_index++) {
         for (bp = seg_list[seg_index]; bp != NULL; bp = SUCC_BLKP(bp)) {
-            if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            if (asize <= GET_SIZE(HDRP(bp))) {
                 return bp;
             }
         }
@@ -327,6 +338,7 @@ static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));
 
+    /* Not realloc and block size is large enough to split */
     if (!realloc_flag && (csize - asize) >= MINBLOCKSIZE) {
         delete_block(bp);
         PUT(HDRP(bp), PACK(asize, 1));
@@ -426,7 +438,7 @@ static void mm_check() {
         /* Block size must be aligned */
         size_t size = GET_SIZE(HDRP(bp));
         assert (size == ALIGN(size));
-        printf("bp: %x size: %d allocated: %d\n", bp, size, GET_ALLOC(HDRP(bp)));
+
         /* Pass header and footer */
         if (bp == heap_listp || size == 0)
             continue;
